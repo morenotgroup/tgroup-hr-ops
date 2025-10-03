@@ -4,4 +4,13 @@
 
 /* base mínima pro “modo TV” */
 html, body { height: 100%; }
-body { @apply bg-white text-gray-900 overflow-hidden; }
+
+/* ----- NOVO FUNDO ----- */
+body {
+  @apply text-gray-900 overflow-hidden;
+  /* Camadas: dois radiais sutis + um linear muito leve */
+  background:
+    radial-gradient(1200px circle at 0% -10%, rgba(253, 230, 138, 0.25), transparent 40%),
+    radial-gradient(1000px circle at 100% -10%, rgba(125, 211, 252, 0.25), transparent 38%),
+    linear-gradient(180deg, #f8fafc 0%, #ffffff 70%);
+}
