@@ -23,10 +23,11 @@ body::before {
 
   /* 4 radiais com opacidade baixa p/ não “sujar” a UI */
   background:
-    radial-gradient(35% 55% at 10% -10%, rgba(147, 51, 234, 0.30), transparent 60%),   /* purple-600 */
-    radial-gradient(35% 55% at 90% -10%, rgba(59, 130, 246, 0.28), transparent 60%),   /* blue-500   */
-    radial-gradient(45% 60% at 50% 0%,   rgba(56, 189, 248, 0.25), transparent 60%),   /* cyan-400   */
-    radial-gradient(40% 60% at 50% 100%, rgba(168, 85, 247, 0.22), transparent 60%);  /* violet-500 */
+    rgba(251, 146, 60, 0.30),   /* orange-400  */
+    rgba(244, 63, 94, 0.28),    /* rose-500    */
+    rgba(253, 164, 175, 0.22),  /* rose-300    */
+    rgba(250, 204, 21, 0.18)    /* yellow-400  */
+
 
   background-repeat: no-repeat;
   background-size: 120% 120%, 120% 120%, 120% 120%, 120% 120%;
