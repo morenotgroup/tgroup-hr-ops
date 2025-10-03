@@ -5,10 +5,9 @@ import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { CalendarDays, AlertTriangle, CheckCircle2, Clock, Plus, ArrowRightLeft, ShieldAlert, LayoutList, LayoutGrid } from "lucide-react";
 
-/** ====== CONFIG ====== */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
-/** ====== CONSTS ====== */
+/* ===== CONSTS ===== */
 const PRIORITY = {
   P0: { label: "P0 • UTI", weight: 6 },
   P1: { label: "P1 • Alta", weight: 4 },
@@ -26,16 +25,12 @@ const AREAS = [
 
 const COMPANIES = ["T Group","T Youth","T Brands","T Dreams","T Venues","WAS","Mood"] as const;
 
-/** ====== DEMO (quando API_BASE vazio) ====== */
+/* ===== DEMO ===== */
 const demoTasks = [
-  { id:"T-001", title:"Atualizar política de férias PJ", description:"Revisar documento e comunicar.", owner:"Moreno", area:"Folha & DP", company:"T Youth", priority:"P1", status:"Em Progresso", created_at:"2025-09-15", due_date:"2025-10-03", updated_at:"2025-10-01", labels:"política, férias", requester:"Financeiro", impact:"Alta", sla_hours:72, linked_docs:"", recurrence:"", last_comment:"Aguardando jurídico." },
-  { id:"T-002", title:"Dashboard férias – Looker", description:"Conectar planilha e publicar.", owner:"Moreno", area:"Sistemas Internos (Apps)", company:"T Youth", priority:"P0", status:"Bloqueado", created_at:"2025-09-20", due_date:"2025-09-28", updated_at:"2025-09-29", labels:"dashboard, férias", requester:"Sócios T Youth", impact:"Alta", sla_hours:48, linked_docs:"", recurrence:"", last_comment:"Acesso GC pendente." },
-  { id:"T-003", title:"Happy Hour + Parabéns Outubro", description:"Definir patrocinador, bolo, convites.", owner:"PEX", area:"Café com T / HH / Aniversariantes", company:"T Group", priority:"P2", status:"Backlog", created_at:"2025-09-27", due_date:"2025-10-08", updated_at:"2025-09-27", labels:"cultura, evento", requester:"Gente & Cultura", impact:"Média", sla_hours:120, linked_docs:"", recurrence:"Mensal", last_comment:"Aguardando confirmação." },
-  { id:"T-004", title:"Mentoria Facilities: checklist diário", description:"Implantar check-in acrílico.", owner:"Gabriel Ventura", area:"Facilities & Sede", company:"T Venues", priority:"P1", status:"Em Aprovação", created_at:"2025-09-10", due_date:"2025-10-02", updated_at:"2025-10-02", labels:"limpeza, padrão", requester:"WAS/Facilities", impact:"Alta", sla_hours:96, linked_docs:"", recurrence:"", last_comment:"Piloto finalizado." },
-  { id:"T-005", title:"Contrato Petin – renovação", description:"Revisar cláusulas e aditivo.", owner:"Moreno", area:"Benefícios", company:"T Group", priority:"P3", status:"Em Progresso", created_at:"2025-09-05", due_date:"2025-10-20", updated_at:"2025-09-30", labels:"benefício, parceria", requester:"GC", impact:"Baixa", sla_hours:168, linked_docs:"", recurrence:"Anual", last_comment:"Aguardando comercial." }
+  { id:"T-001", title:"Atualizar política de férias PJ", description:"Revisar documento e comunicar.", owner:"Moreno", area:"Folha & DP", company:"T Youth", priority:"P1", status:"Em Progresso", created_at:"2025-09-15", due_date:"2025-10-03", updated_at:"2025-10-01", labels:"política, férias", requester:"Financeiro", impact:"Alta", sla_hours:72, linked_docs:"", recurrence:"", last_comment:"Aguardando jurídico." }
 ];
 
-/** ====== Utils ====== */
+/* ===== utils ===== */
 const fmtDate = (d?: string) => (d ? new Date(d + "T00:00:00") : undefined);
 const daysBetween = (a?: Date, b?: Date) => (a && b ? Math.floor((a.getTime() - b.getTime()) / 86400000) : 0);
 
@@ -51,6 +46,7 @@ function computeDerived(task: any) {
   return { overdueDays, isOverdue, riskIndex, isUTI };
 }
 
+/* ===== data hook ===== */
 function useTasks() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,32 +60,64 @@ function useTasks() {
       } else {
         const res = await fetch(`${API_BASE}?route=list`, { cache: "no-store" });
         const json = await res.json();
+        if (json?.ok === false) throw new Error(json?.error || "Falha ao listar");
         setTasks(json.data ?? []);
       }
-    } catch (e: any) { setError(e?.message || "Falha ao carregar"); }
-    finally { setLoading(false); }
+    } catch (e: any) {
+      setError(e?.message || "Falha ao carregar");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const create = async (payload: any) => {
-    if (!API_BASE) {
-      setTasks(prev => [{ ...payload, id: `T-${(prev.length + 1).toString().padStart(3,"0")}` }, ...prev]);
-      return;
+    try {
+      if (!API_BASE) {
+        setTasks(prev => [{ ...payload, id: `T-${(prev.length + 1).toString().padStart(3,"0")}` }, ...prev]);
+        return;
+      }
+      // Se estamos usando o proxy (/api/gs), o POST espera {route, body}
+      const usingProxy = API_BASE.startsWith("/api/");
+      const url = usingProxy ? API_BASE : `${API_BASE}?route=create`;
+      const init: RequestInit = usingProxy
+        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ route: "create", body: payload }) }
+        : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) };
+
+      const res = await fetch(url, init);
+      const json = await res.json();
+      if (!json?.ok) throw new Error(json?.error || "Falha ao criar");
+      await load();
+    } catch (e: any) {
+      setError(e?.message || "Erro ao criar tarefa");
     }
-    const res = await fetch(`${API_BASE}?route=create`, { method:"POST", body: JSON.stringify(payload) });
-    const json = await res.json(); if (json?.ok) load();
   };
 
   const update = async (id: string, patch: any) => {
-    if (!API_BASE) { setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t)); return; }
-    const res = await fetch(`${API_BASE}?route=update&id=${encodeURIComponent(id)}`, { method:"POST", body: JSON.stringify(patch) });
-    const json = await res.json(); if (json?.ok) load();
+    try {
+      if (!API_BASE) {
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+        return;
+      }
+      const usingProxy = API_BASE.startsWith("/api/");
+      const url = usingProxy ? API_BASE : `${API_BASE}?route=update&id=${encodeURIComponent(id)}`;
+      const init: RequestInit = usingProxy
+        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ route: "update", id, body: patch }) }
+        : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) };
+
+      const res = await fetch(url, init);
+      const json = await res.json();
+      if (!json?.ok) throw new Error(json?.error || "Falha ao atualizar");
+      await load();
+    } catch (e: any) {
+      setError(e?.message || "Erro ao atualizar tarefa");
+    }
   };
 
   useEffect(() => { load(); }, []);
   return { tasks, loading, error, reload: load, create, update };
 }
 
-/** ====== UI atoms ====== */
+/* ===== UI ===== */
 function StatTile({ title, value, icon }: { title: string; value: number; icon?: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-white/20 shadow-sm p-4 flex items-center gap-3 bg-white/85 backdrop-blur text-slate-800">
@@ -229,7 +257,7 @@ function CreateTaskModal({ onCreate }: { onCreate: (p: any) => void }) {
   );
 }
 
-/** ====== APP ====== */
+/* ===== APP ===== */
 export default function App() {
   const { tasks, loading, error, update, create } = useTasks();
   const [query, setQuery] = useState("");
@@ -271,7 +299,6 @@ export default function App() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
-      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
           <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
@@ -291,7 +318,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* FILTROS */}
       <div className="rounded-2xl border border-white/20 mb-4 bg-white/85 backdrop-blur text-slate-800">
         <div className="p-4 grid md:grid-cols-6 gap-2">
           <input className="border rounded-xl px-3 py-2 bg-white/90 text-slate-800 placeholder-slate-500"
@@ -318,9 +344,8 @@ export default function App() {
         </div>
       </div>
 
-      {error && <div className="text-red-300">{String(error)}</div>}
+      {error && <div className="text-red-300 mb-2">Erro: {String(error)}</div>}
 
-      {/* DASHBOARD / KANBAN */}
       {view === "dashboard" ? (
         <div className="space-y-4">
           <div className="grid md:grid-cols-4 gap-3">
