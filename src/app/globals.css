@@ -2,67 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-/* base mínima pro “modo TV” */
+/* ===== Base / TV mode ===== */
 html, body { height: 100%; }
 
-/* ===== SUNSET ANIMADO (laranja + rosa) ===== */
+/* ===== AURORA DEEP (Roxo → Azul piscina) ===== */
 body {
-  @apply text-gray-900 overflow-hidden;
-  /* base estática com “areia” bem clara */
-  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 70%);
+  @apply text-gray-100 overflow-hidden;
+  /* Base profunda para dar contraste (quase noite) */
+  background:
+    radial-gradient(1200px 800px at 50% 120%, #06192b 0%, #0b1020 55%, #0a0f1e 100%);
   position: relative;
 }
 
-/* camada de blobs animados */
+/* Camada animada de “aurora” (blobs roxo/azul/ciano) */
 body::before {
   content: "";
   position: fixed;
-  inset: -20% -10% -20% -10%;   /* expandido p/ não cortar nas bordas */
+  inset: -25% -15% -25% -15%;
   z-index: -1;
   pointer-events: none;
 
-  /* 4 radiais com opacidade baixa p/ não “sujar” a UI */
+  /* 4 gradientes radiais com cores vibrantes */
   background:
-    radial-gradient(35% 55% at 10% -10%, rgba(251, 146, 60, 0.30), transparent 60%),   /* orange-400  */
-    radial-gradient(35% 55% at 90% -10%, rgba(244, 63, 94, 0.28),  transparent 60%),   /* rose-500    */
-    radial-gradient(45% 60% at 50% 0%,   rgba(253, 164, 175, 0.22), transparent 60%),  /* rose-300    */
-    radial-gradient(40% 60% at 50% 100%, rgba(250, 204, 21, 0.18),  transparent 60%);  /* yellow-400  */
+    radial-gradient(38% 58% at 0% -10%,    rgba(124, 58, 237, 0.55),  transparent 60%), /* violet-600  */
+    radial-gradient(42% 62% at 100% -10%,  rgba(6, 182, 212, 0.50),   transparent 60%), /* cyan-500    */
+    radial-gradient(50% 70% at 50% 10%,    rgba(34, 211, 238, 0.38),  transparent 65%), /* cyan-400    */
+    radial-gradient(48% 68% at 50% 110%,   rgba(99, 102, 241, 0.33),  transparent 65%); /* indigo-500  */
 
   background-repeat: no-repeat;
   background-size: 120% 120%, 120% 120%, 120% 120%, 120% 120%;
-  filter: blur(30px) saturate(115%);
+  filter: blur(42px) saturate(120%);
   opacity: 0.95;
 
-  /* movimento + leve variação de matiz */
+  /* Movimento sutil + leve variação de matiz */
   animation:
     aurora-move 28s ease-in-out infinite alternate,
-    aurora-hue 36s ease-in-out infinite alternate;
+    aurora-hue 38s ease-in-out infinite alternate;
   will-change: transform, background-position, filter, opacity;
 }
 
-/* movimento dos blobs (apenas positions + micro scale p/ dar vida) */
+/* “Spotlight” claro no topo para legibilidade do header/inputs */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 420px at 50% 0%, rgba(255,255,255,0.20), transparent 70%);
+  mix-blend-mode: screen;          /* clareia sem lavar as cores */
+}
+
+/* ===== Animações ===== */
 @keyframes aurora-move {
   0% {
-    background-position: -10% -20%, 110% -15%, 50% -10%, 50% 110%;
+    background-position: -12% -18%, 112% -14%, 50% 0%, 52% 112%;
     transform: translate3d(0,0,0) scale(1);
   }
   50% {
-    background-position: 5% 20%, 95% 0%, 42% 8%, 58% 95%;
-    transform: translate3d(0,-0.5%,0) scale(1.02);
+    background-position: 6% 18%, 96% 2%, 44% 6%, 58% 96%;
+    transform: translate3d(0,-0.6%,0) scale(1.02);
   }
   100% {
-    background-position: 10% 40%, 90% 10%, 60% 0%, 40% 90%;
+    background-position: 10% 38%, 90% 14%, 60% 8%, 40% 90%;
     transform: translate3d(0,0,0) scale(1);
   }
 }
 
-/* variação de cor bem leve (mantém a paleta Sunset) */
 @keyframes aurora-hue {
-  0%   { filter: blur(30px) saturate(115%) hue-rotate(0deg); }
-  100% { filter: blur(30px) saturate(115%) hue-rotate(10deg); }
+  0%   { filter: blur(42px) saturate(120%) hue-rotate(0deg); }
+  100% { filter: blur(42px) saturate(120%) hue-rotate(16deg); }
 }
 
-/* acessibilidade: se usuário prefere menos animação, desliga o motion */
+/* Acessibilidade: respeita preferência por menos animação */
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }
 }
