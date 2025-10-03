@@ -99,7 +99,7 @@ function useTasks() {
 
 function StatTile({ title, value, icon }: { title: string; value: number; icon?: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border shadow-sm p-4 flex items-center gap-3 bg-white">
+    <div className="rounded-2xl border shadow-sm p-4 flex items-center gap-3 bg-white/80 backdrop-blur">
       <div className="p-2 rounded-xl bg-gray-100">{icon}</div>
       <div>
         <div className="text-xs uppercase text-gray-500">{title}</div>
@@ -123,7 +123,7 @@ function PriorityBadge({ p }: { p: keyof typeof PRIORITY | string }) {
 function StatusColumn({ status, items, onDrop }: any) {
   return (
     <div
-      className="bg-white rounded-2xl p-3 shadow-sm min-h-[60vh] border"
+      className="bg-white/80 backdrop-blur rounded-2xl p-3 shadow-sm min-h-[60vh] border"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         const id = e.dataTransfer.getData("text/plain");
@@ -146,7 +146,7 @@ function StatusColumn({ status, items, onDrop }: any) {
             {/* 👉 motion.div apenas para animação (sem prop 'drag') */}
             <motion.div
               layout
-              className={`rounded-xl border p-3 bg-white ${t._derived.isUTI ? "border-red-500" : ""}`}
+              className={`rounded-xl border p-3 bg-white/80 backdrop-blur ${t._derived.isUTI ? "border-red-500" : ""}`}
             >
               <div className="flex items-center justify-between">
                 <div className="font-medium leading-tight pr-2">{t.title}</div>
@@ -287,7 +287,7 @@ export default function App() {
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold">T Group • HR Ops</h1>
+          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">T Group • HR Ops</h1>
           <p className="text-sm text-gray-500">Painel unificado: demandas, riscos e prioridades (modo {API_BASE ? "PROD" : "DEMO"}).</p>
         </div>
         <div className="flex items-center gap-2">
@@ -299,7 +299,7 @@ export default function App() {
       </div>
 
       {/* Filtros */}
-      <div className="rounded-2xl border mb-4 bg-white">
+      <div className="rounded-2xl border mb-4 bg-white/80 backdrop-blur">
         <div className="p-4 grid md:grid-cols-6 gap-2">
           <input className="border rounded-xl px-3 py-2" placeholder="Buscar por título, descrição ou labels" value={query} onChange={(e)=>setQuery(e.target.value)} />
           <select className="border rounded-xl px-3 py-2" onChange={(e)=>setFilters({ ...filters, company:e.target.value })} defaultValue="">
@@ -336,7 +336,7 @@ export default function App() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
-            <div className="rounded-2xl border bg-white">
+            <div className="rounded-2xl border bg-white/80 backdrop-blur">
               <div className="p-4">
                 <div className="font-medium mb-2">Abertas por Área</div>
                 <ResponsiveContainer width="100%" height={220}>
