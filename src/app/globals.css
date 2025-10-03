@@ -5,16 +5,16 @@
 /* ===== Base / TV mode ===== */
 html, body { height: 100%; }
 
-/* ===== AURORA DEEP (Roxo → Azul piscina) ===== */
+/* ===== AURORA DEEP (Roxo → Azul piscina) com movimento ===== */
 body {
   @apply text-gray-100 overflow-hidden;
-  /* Base profunda para dar contraste (quase noite) */
+  /* Base profunda para contraste */
   background:
     radial-gradient(1200px 800px at 50% 120%, #06192b 0%, #0b1020 55%, #0a0f1e 100%);
   position: relative;
 }
 
-/* Camada animada de “aurora” (blobs roxo/azul/ciano) */
+/* Layer animada (degradê em movimento) */
 body::before {
   content: "";
   position: fixed;
@@ -22,26 +22,22 @@ body::before {
   z-index: -1;
   pointer-events: none;
 
-  /* 4 gradientes radiais com cores vibrantes */
-  background:
-    radial-gradient(38% 58% at 0% -10%,    rgba(124, 58, 237, 0.55),  transparent 60%), /* violet-600  */
-    radial-gradient(42% 62% at 100% -10%,  rgba(6, 182, 212, 0.50),   transparent 60%), /* cyan-500    */
-    radial-gradient(50% 70% at 50% 10%,    rgba(34, 211, 238, 0.38),  transparent 65%), /* cyan-400    */
-    radial-gradient(48% 68% at 50% 110%,   rgba(99, 102, 241, 0.33),  transparent 65%); /* indigo-500  */
+  /* Degradê que "anda" (roxo → azul piscina) */
+  background: linear-gradient(
+    45deg,
+    #6d28d9 0%,
+    #3b82f6 50%,
+    #06b6d4 100%
+  );
+  background-size: 220% 220%;
+  filter: saturate(120%) brightness(95%);
+  opacity: 0.85;
 
-  background-repeat: no-repeat;
-  background-size: 120% 120%, 120% 120%, 120% 120%, 120% 120%;
-  filter: blur(42px) saturate(120%);
-  opacity: 0.95;
-
-  /* Movimento sutil + leve variação de matiz */
-  animation:
-    aurora-move 28s ease-in-out infinite alternate,
-    aurora-hue 38s ease-in-out infinite alternate;
-  will-change: transform, background-position, filter, opacity;
+  animation: gradientShift 22s ease-in-out infinite alternate;
+  will-change: background-position, filter;
 }
 
-/* “Spotlight” claro no topo para legibilidade do header/inputs */
+/* Glow claro no topo para legibilidade do header/inputs */
 body::after {
   content: "";
   position: fixed;
@@ -49,32 +45,24 @@ body::after {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(900px 420px at 50% 0%, rgba(255,255,255,0.20), transparent 70%);
-  mix-blend-mode: screen;          /* clareia sem lavar as cores */
+    radial-gradient(900px 420px at 50% 0%, rgba(255,255,255,0.22), transparent 70%);
+  mix-blend-mode: screen;
 }
 
-/* ===== Animações ===== */
-@keyframes aurora-move {
-  0% {
-    background-position: -12% -18%, 112% -14%, 50% 0%, 52% 112%;
-    transform: translate3d(0,0,0) scale(1);
-  }
-  50% {
-    background-position: 6% 18%, 96% 2%, 44% 6%, 58% 96%;
-    transform: translate3d(0,-0.6%,0) scale(1.02);
-  }
-  100% {
-    background-position: 10% 38%, 90% 14%, 60% 8%, 40% 90%;
-    transform: translate3d(0,0,0) scale(1);
-  }
-}
-
-@keyframes aurora-hue {
-  0%   { filter: blur(42px) saturate(120%) hue-rotate(0deg); }
-  100% { filter: blur(42px) saturate(120%) hue-rotate(16deg); }
+/* Movimento do degradê */
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%;   }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%;   }
 }
 
 /* Acessibilidade: respeita preferência por menos animação */
 @media (prefers-reduced-motion: reduce) {
   body::before { animation: none; }
+}
+
+/* Placeholders mais visíveis nos inputs claros */
+input::placeholder,
+textarea::placeholder {
+  color: rgba(71, 85, 105, 0.9); /* slate-600 */
 }
