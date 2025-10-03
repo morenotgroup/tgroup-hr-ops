@@ -5,7 +5,6 @@ export const metadata = {
 
 import "./globals.css";
 import type { ReactNode } from "react";
-// 👇 importa Montserrat via next/font
 import { Montserrat } from "next/font/google";
 
 const montserrat = Montserrat({
@@ -17,7 +16,6 @@ const montserrat = Montserrat({
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="pt-br" className={montserrat.variable}>
-      {/* 👇 aplica a família globalmente */}
       <body className="font-sans antialiased">{children}</body>
     </html>
   );
