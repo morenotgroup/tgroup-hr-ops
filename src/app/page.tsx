@@ -125,43 +125,69 @@ function StatusColumn({ status, items, onDrop }: any) {
     <div
       className="bg-white rounded-2xl p-3 shadow-sm min-h-[60vh] border"
       onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => { const id = e.dataTransfer.getData("text/plain"); onDrop(id, status); }}
+      onDrop={(e) => {
+        const id = e.dataTransfer.getData("text/plain");
+        if (id) onDrop(id, status);
+      }}
     >
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-semibold">{status}</h3>
         <span className="text-xs px-2 py-1 rounded-full bg-gray-100">{items.length}</span>
       </div>
+
       <div className="space-y-3">
         {items.map((t: any) => (
-          <motion.div key={t.id} layout drag onDragStart={(e) => e.dataTransfer.setData("text/plain", t.id)}
-            className={`rounded-xl border p-3 bg-white ${t._derived.isUTI ? "border-red-500" : ""}`}
+          // 👉 wrapper nativo para drag&drop HTML
+          <div
+            key={t.id}
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData("text/plain", t.id)}
           >
-            <div className="flex items-center justify-between">
-              <div className="font-medium leading-tight pr-2">{t.title}</div>
-              <PriorityBadge p={t.priority} />
-            </div>
-            <div className="text-xs text-gray-500 mt-1 line-clamp-2">{t.description}</div>
-            <div className="mt-2 flex items-center gap-2 text-xs">
-              <span className={`px-2 py-1 rounded-full ${t._derived.isOverdue ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
-                <CalendarDays className="w-3 h-3 inline mr-1" />
-                {t.due_date || "s/ prazo"}
-              </span>
-              {t._derived.isUTI && (
-                <span className="px-2 py-1 rounded-full bg-red-600 text-white text-xs">
-                  <ShieldAlert className="w-3 h-3 inline mr-1" /> UTI
+            {/* 👉 motion.div apenas para animação (sem prop 'drag') */}
+            <motion.div
+              layout
+              className={`rounded-xl border p-3 bg-white ${t._derived.isUTI ? "border-red-500" : ""}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="font-medium leading-tight pr-2">{t.title}</div>
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  t.priority === "P0" ? "bg-red-100 text-red-700" :
+                  t.priority === "P1" ? "bg-orange-100 text-orange-700" :
+                  t.priority === "P2" ? "bg-yellow-100 text-yellow-700" :
+                  "bg-gray-100 text-gray-700"
+                }`}>
+                  {t.priority === "P0" ? "P0 • UTI" :
+                   t.priority === "P1" ? "P1 • Alta" :
+                   t.priority === "P2" ? "P2 • Média" : "P3 • Baixa"}
                 </span>
-              )}
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs">
-              <span>Owner: <b>{t.owner}</b></span>
-              <span className="text-gray-500">{t.area}</span>
-            </div>
-          </motion.div>
+              </div>
+
+              <div className="text-xs text-gray-500 mt-1 line-clamp-2">{t.description}</div>
+
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                <span className={`px-2 py-1 rounded-full ${t._derived.isOverdue ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
+                  <CalendarDays className="w-3 h-3 inline mr-1" />
+                  {t.due_date || "s/ prazo"}
+                </span>
+                {t._derived.isUTI && (
+                  <span className="px-2 py-1 rounded-full bg-red-600 text-white text-xs">
+                    <ShieldAlert className="w-3 h-3 inline mr-1" /> UTI
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <span>Owner: <b>{t.owner}</b></span>
+                <span className="text-gray-500">{t.area}</span>
+              </div>
+            </motion.div>
+          </div>
         ))}
       </div>
     </div>
   );
 }
+
 
 function CreateTaskModal({ onCreate }: { onCreate: (p: any) => void }) {
   const [open, setOpen] = useState(false);
