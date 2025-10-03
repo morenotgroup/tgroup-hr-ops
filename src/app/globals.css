@@ -5,11 +5,11 @@
 /* base mínima pro “modo TV” */
 html, body { height: 100%; }
 
-/* ===== AURORA ANIMADA (ROXO + AZUL) ===== */
+/* ===== SUNSET ANIMADO (laranja + rosa) ===== */
 body {
   @apply text-gray-900 overflow-hidden;
-  /* base estática clarinha */
-  background: linear-gradient(180deg, #f7f9fc 0%, #ffffff 70%);
+  /* base estática com “areia” bem clara */
+  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 70%);
   position: relative;
 }
 
@@ -23,11 +23,10 @@ body::before {
 
   /* 4 radiais com opacidade baixa p/ não “sujar” a UI */
   background:
-    rgba(251, 146, 60, 0.30),   /* orange-400  */
-    rgba(244, 63, 94, 0.28),    /* rose-500    */
-    rgba(253, 164, 175, 0.22),  /* rose-300    */
-    rgba(250, 204, 21, 0.18)    /* yellow-400  */
-
+    radial-gradient(35% 55% at 10% -10%, rgba(251, 146, 60, 0.30), transparent 60%),   /* orange-400  */
+    radial-gradient(35% 55% at 90% -10%, rgba(244, 63, 94, 0.28),  transparent 60%),   /* rose-500    */
+    radial-gradient(45% 60% at 50% 0%,   rgba(253, 164, 175, 0.22), transparent 60%),  /* rose-300    */
+    radial-gradient(40% 60% at 50% 100%, rgba(250, 204, 21, 0.18),  transparent 60%);  /* yellow-400  */
 
   background-repeat: no-repeat;
   background-size: 120% 120%, 120% 120%, 120% 120%, 120% 120%;
@@ -37,11 +36,11 @@ body::before {
   /* movimento + leve variação de matiz */
   animation:
     aurora-move 28s ease-in-out infinite alternate,
-    aurora-hue 40s ease-in-out infinite alternate;
+    aurora-hue 36s ease-in-out infinite alternate;
   will-change: transform, background-position, filter, opacity;
 }
 
-/* movimento dos blobs (apenas positions + um micro scale p/ dar vida) */
+/* movimento dos blobs (apenas positions + micro scale p/ dar vida) */
 @keyframes aurora-move {
   0% {
     background-position: -10% -20%, 110% -15%, 50% -10%, 50% 110%;
@@ -57,10 +56,10 @@ body::before {
   }
 }
 
-/* variação de cor bem leve (não vai “pular” o tom) */
+/* variação de cor bem leve (mantém a paleta Sunset) */
 @keyframes aurora-hue {
   0%   { filter: blur(30px) saturate(115%) hue-rotate(0deg); }
-  100% { filter: blur(30px) saturate(115%) hue-rotate(18deg); }
+  100% { filter: blur(30px) saturate(115%) hue-rotate(10deg); }
 }
 
 /* acessibilidade: se usuário prefere menos animação, desliga o motion */
