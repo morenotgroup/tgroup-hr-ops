@@ -11,7 +11,7 @@ export async function apiCreate(task: any) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(task),
   });
-  return r.json(); // { ok, id } ou { ok:false, error }
+  return r.json(); // { ok, id } | { ok:false, error }
 }
 
 export async function apiUpdate(id: string, patch: any) {
