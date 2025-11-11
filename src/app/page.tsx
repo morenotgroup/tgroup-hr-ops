@@ -1,362 +1,407 @@
-// src/app/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 
+/** ========= Config ========= **/
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/gs';
+
+// Colunas do Kanban (o que aparece no board)
+const KANBAN_COLUMNS = [
+  { key: 'Backlog',      title: 'Backlog' },
+  { key: 'Em Progresso', title: 'Em Progresso' },
+  { key: 'Aguardando',   title: 'Aguardando' },
+  { key: 'UTI',          title: 'UTI' },
+  { key: 'Concluído',    title: 'Concluído' },
+];
+
+// Opções
+const AREAS = [
+  'Admissão & Demissão',
+  'Recrutamento',
+  'Folha',
+  'Facilities',
+  'Benefícios & Parcerias',
+  'Onboarding',
+  'Políticas & Compliance',
+  'Cultura & Eventos',
+  'Desenvolvimento & Treinamento',
+  'Facilities — Limpeza',
+  'Facilities — Cozinha',
+  'Facilities — Estoque de Bebidas',
+  'Jurídico (pessoal)',
+  'Financeiro (pessoal)',
+];
+
+const COMPANIES = [
+  'T Group',
+  'T Youth — Toy Formaturas',
+  'T Youth — Neo Formaturas',
+  'T Dreams',
+  'T Brands',
+  'T Venues',
+  'Mood',
+  'WAS',
+];
+
+const PRIORITIES = ['P1', 'P2', 'P3'];
+const IMPACTS    = ['Alta', 'Média', 'Baixa'];
+
+/** ========= Tipos ========= **/
 type Task = {
-  id: string;
-  title: string;
-  description: string;
-  owner: string;
-  area: string;
-  company: string;
-  priority: 'P1'|'P2'|'P3'|'P4'|string;
-  status: 'Backlog'|'Em Progresso'|'Em Aprovação'|'Bloqueado'|'Concluído'|string;
-  created_at?: string;
-  due_date?: string;
-  updated_at?: string;
-  labels?: string;
+  id?: string;
+  title?: string;
+  description?: string;
+  owner?: string;
   requester?: string;
+  company?: string;
+  area?: string;
+  priority?: string;
   impact?: string;
+  status?: string;
+  due_date?: string;
+  labels?: string;
   sla_hours?: string;
   linked_docs?: string;
   recurrence?: string;
   last_comment?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
-const STATUS_COLS = [
-  { key: 'Backlog',       title: 'Backlog' },
-  { key: 'Em Progresso',  title: 'Em Progresso' },
-  { key: 'Em Aprovação',  title: 'Em Aprovação' },
-  { key: 'Bloqueado',     title: 'Bloqueado' },
-  { key: 'Concluído',     title: 'Concluído' },
-] as const;
-
-function fmtDate(d?: string) {
-  if (!d) return '—';
-  try {
-    const dt = new Date(d);
-    return dt.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-  } catch { return '—'; }
+/** ========= Helpers de API (SEM arquivos extras) ========= **/
+async function apiList(): Promise<{ ok: boolean; data?: Task[]; error?: string }> {
+  const r = await fetch(`${API_BASE}?route=list`, { cache: 'no-store' });
+  return r.json();
 }
 
-async function apiGetList(): Promise<{ ok: boolean; data: Task[]; error?: any }> {
-  const res = await fetch('/api/gs?route=list', { cache: 'no-store' });
-  const json = await res.json().catch(() => ({ ok: false, error: 'invalid_json' }));
-  return json;
-}
-
-async function apiCreate(task: Partial<Task>) {
-  const res = await fetch('/api/gs', {
+async function apiCreate(task: Task): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const r = await fetch(`${API_BASE}?route=create`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ route: 'create', body: task }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(task),
   });
-  const json = await res.json().catch(() => ({ ok: false, error: 'invalid_json' }));
-  return json;
+  return r.json();
 }
 
-export default function Page() {
-  const [list, setList] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+async function apiUpdate(id: string, patch: Partial<Task>): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const r = await fetch(`${API_BASE}?route=update&id=${encodeURIComponent(id)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return r.json();
+}
 
-  // modal criar
-  const [openNew, setOpenNew] = useState(false);
+/** ========= UI ========= **/
+export default function Page() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [newTask, setNewTask] = useState<Partial<Task>>({
+
+  // form de nova tarefa
+  const [newTask, setNewTask] = useState<Task>({
     title: '',
     description: '',
-    owner: '',
-    area: 'Admissão & Demissão',
-    company: 'T Group',
+    owner: 'Moreno',
+    requester: 'Moreno',
+    company: COMPANIES[0],
+    area: AREAS[1], // Recrutamento
     priority: 'P2',
+    impact: 'Média',
     status: 'Backlog',
     due_date: '',
-    requester: 'Moreno',
-    impact: 'Média',
+    labels: '',
+    sla_hours: '',
+    linked_docs: '',
+    recurrence: '',
+    last_comment: '',
   });
-
-  // modal detalhes
-  const [openView, setOpenView] = useState<null | Task>(null);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const r = await apiGetList();
-      if (r.ok) {
-        setErr(null);
-        setList(r.data || []);
-      } else {
-        // se veio upstream_non_json, mostra msg curta
-        setErr(
-          r?.error === 'upstream_non_json'
-            ? 'Erro: backend retornou conteúdo não JSON.'
-            : 'Erro ao carregar tarefas.'
-        );
+      try {
+        const res = await apiList();
+        if (res.ok) setTasks(res.data || []);
+        else alert(`Erro ao listar: ${res.error || 'desconhecido'}`);
+      } catch (e: any) {
+        alert(`Falha ao listar: ${String(e)}`);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 
   const columns = useMemo(() => {
-    const map: Record<string, Task[]> = {};
-    STATUS_COLS.forEach(c => (map[c.key] = []));
-    for (const t of list) {
-      if (!map[t.status]) map[t.status] = [];
-      map[t.status].push(t);
+    const m: Record<string, Task[]> = {};
+    KANBAN_COLUMNS.forEach(col => (m[col.key] = []));
+    for (const t of tasks) {
+      const key = t.status && m[t.status] ? t.status : 'Backlog';
+      m[key].push(t);
     }
-    return map;
-  }, [list]);
+    return m;
+  }, [tasks]);
 
+  /** Salvar (create) */
   async function handleSave() {
-    if (saving) return;
-    // validação simples
-    if (!newTask.title?.trim()) { alert('Informe um título'); return; }
     setSaving(true);
-    const payload: Partial<Task> = {
-      ...newTask,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    const r = await apiCreate(payload);
-    setSaving(false);
-    if (r?.ok) {
-      // reload leve
-      const again = await apiGetList();
-      if (again.ok) setList(again.data || []);
-      setOpenNew(false);
-      // limpa form
+    try {
+      if (!newTask.title?.trim()) {
+        alert('Preencha o título da tarefa.');
+        return;
+      }
+      const payload: Task = {
+        title: newTask.title?.trim(),
+        description: newTask.description || '',
+        owner: newTask.owner || 'Moreno',
+        requester: newTask.requester || 'Moreno',
+        company: newTask.company,
+        area: newTask.area,
+        priority: newTask.priority || 'P2',
+        impact: newTask.impact || 'Média',
+        status: newTask.status || 'Backlog',
+        due_date: newTask.due_date || '',
+        labels: newTask.labels || '',
+        sla_hours: newTask.sla_hours || '',
+        linked_docs: newTask.linked_docs || '',
+        recurrence: newTask.recurrence || '',
+        last_comment: newTask.last_comment || '',
+      };
+
+      const res = await apiCreate(payload);
+      if (!res.ok) {
+        alert(`Falha ao salvar: ${res.error || 'erro_desconhecido'}`);
+        return;
+      }
+
+      // reload list
+      const list = await apiList();
+      if (list.ok) setTasks(list.data || []);
+
+      setOpen(false);
       setNewTask({
         title: '',
         description: '',
-        owner: '',
-        area: 'Admissão & Demissão',
-        company: 'T Group',
+        owner: 'Moreno',
+        requester: 'Moreno',
+        company: COMPANIES[0],
+        area: AREAS[1],
         priority: 'P2',
+        impact: 'Média',
         status: 'Backlog',
         due_date: '',
-        requester: 'Moreno',
-        impact: 'Média',
+        labels: '',
+        sla_hours: '',
+        linked_docs: '',
+        recurrence: '',
+        last_comment: '',
       });
-    } else {
-      alert('Falha ao salvar: ' + (r?.error || 'erro desconhecido'));
+    } catch (e: any) {
+      alert(`Falha ao salvar: ${String(e)}`);
+    } finally {
+      setSaving(false);
     }
   }
 
-  return (
-    <div className="min-h-screen bg-[#0b1320] text-slate-100 relative">
-      {/* aurora animada */}
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(1200px_600px_at_10%_-10%,rgba(56,189,248,.25),transparent),radial-gradient(900px_500px_at_100%_0%,rgba(139,92,246,.25),transparent),radial-gradient(1000px_600px_at_50%_120%,rgba(59,130,246,.25),transparent)] animate-[pulse_10s_ease-in-out_infinite]" />
-      </div>
+  /** Atualizar status rapidamente (ex.: mover de coluna via botão) */
+  async function quickMove(id?: string, next?: string) {
+    if (!id || !next) return;
+    const res = await apiUpdate(id, { status: next });
+    if (!res.ok) {
+      alert(`Falha ao mover: ${res.error || 'erro'}`);
+      return;
+    }
+    const list = await apiList();
+    if (list.ok) setTasks(list.data || []);
+  }
 
-      <header className="px-5 pt-6 pb-2 flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold">
-          T Group • HR Ops <span className="text-sky-300">— Gente e Cultura</span>
-        </h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setOpenNew(true)}
-            className="rounded-xl px-4 py-2 bg-white/10 hover:bg-white/15 border border-white/20"
-          >
-            + Nova tarefa
-          </button>
-          <a
-            href="/"
-            className="rounded-xl px-4 py-2 bg-white/10 hover:bg-white/15 border border-white/20"
-          >
-            Dashboard
-          </a>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#2a1b5f] via-[#1f2a6b] to-[#0c1027] text-white">
+      {/* Cabeçalho */}
+      <header className="sticky top-0 z-30 backdrop-blur supports-[backdrop-filter]:bg-white/5 bg-white/0 border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="text-xs uppercase tracking-wider text-white/70">Gente e Cultura</div>
+            <div className="text-lg font-semibold">HR Ops</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setOpen(true)}
+              className="px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 transition"
+            >
+              + Criar tarefa
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* filtros (placeholder) */}
-      <div className="px-5">
-        <div className="rounded-2xl bg-white/5 border border-white/10 p-3 grid grid-cols-1 md:grid-cols-5 gap-3">
-          <input
-            className="rounded-xl bg-white/10 border border-white/20 px-3 py-2 outline-none placeholder:text-slate-300/60"
-            placeholder="Buscar por título, descrição"
-          />
-          <select className="rounded-xl bg-white/10 border border-white/20 px-3 py-2">
-            <option>Empresa (todas)</option>
-          </select>
-          <select className="rounded-xl bg-white/10 border border-white/20 px-3 py-2">
-            <option>Área (todas)</option>
-          </select>
-          <select className="rounded-xl bg-white/10 border border-white/20 px-3 py-2">
-            <option>Prioridade (todas)</option>
-          </select>
-          <select className="rounded-xl bg-white/10 border border-white/20 px-3 py-2">
-            <option>Status (todos)</option>
-          </select>
-        </div>
-      </div>
-
-      {/* barra de erro */}
-      {err && (
-        <div className="px-5 mt-3">
-          <div className="rounded-xl bg-red-400/15 border border-red-300/30 px-4 py-2 text-red-100">
-            {err}
-          </div>
-        </div>
-      )}
-
-      {/* KANBAN */}
-      <div className="px-5 pb-8">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
-          {STATUS_COLS.map(col => {
-            const items = columns[col.key] || [];
-            return (
-              <div key={col.key} className="rounded-2xl bg-white/5 border border-white/10 p-2 flex flex-col">
-                <div className="px-2 py-1 text-sm text-slate-200/90 flex items-center justify-between">
-                  <span>{col.title}</span>
-                  <span className="text-xs rounded-full bg-white/10 px-2 py-0.5">{items.length}</span>
+      {/* Board */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {loading ? (
+          <div className="text-white/80">Carregando…</div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {KANBAN_COLUMNS.map((col) => (
+              <section key={col.key} className="flex flex-col rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl">
+                <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                  <h2 className="font-semibold">{col.title}</h2>
+                  <span className="text-sm text-white/70">{columns[col.key]?.length ?? 0}</span>
                 </div>
-
-                <div className="mt-2 grow rounded-xl bg-gradient-to-b from-white/5 to-white/0 p-2
-                                overflow-y-auto"
-                     style={{ maxHeight: 'calc(100vh - 260px)' }}>
-                  {loading && <div className="text-slate-300/70 px-2 py-4 text-sm">Carregando…</div>}
-
-                  {items.map((t) => (
-                    <div
-                      key={t.id + Math.random()} // evita conflito por IDs duplicados vindos da planilha
-                      onClick={() => setOpenView(t)}
-                      className="cursor-pointer select-none rounded-xl border border-white/10 bg-white/10 hover:bg-white/15 p-3 mb-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium">{t.title || '(sem título)'}</div>
-                        <span className="text-[11px] rounded-md bg-yellow-300/20 border border-yellow-300/30 text-yellow-200 px-2 py-0.5">
-                          {t.priority || '—'} • {t.impact || '—'}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-300/80 mt-1">
-                        <div className="flex items-center gap-2">
-                          <span>📅 {fmtDate(t.due_date)}</span>
+                <div className="p-3 space-y-3 h-[calc(100vh-240px)] overflow-y-auto">
+                  {(columns[col.key] || []).map((t) => (
+                    <article key={t.id} className="rounded-xl border border-white/10 bg-white/10 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="font-medium">{t.title}</div>
+                          <div className="text-sm text-white/70">
+                            {t.company} • {t.area}
+                          </div>
+                          {t.due_date && (
+                            <div className="text-xs text-white/60">
+                              Prazo: {new Date(t.due_date).toLocaleDateString('pt-BR')}
+                            </div>
+                          )}
                         </div>
-                        <div className="mt-1">Owner: <b>{t.owner || '—'}</b></div>
-                        <div className="text-[11px] opacity-70">{t.area}</div>
+                        <div className="flex flex-col gap-2">
+                          <span className="text-xs px-2 py-1 rounded bg-white/15">{t.priority}</span>
+                          {t.id && col.key !== 'Concluído' && (
+                            <button
+                              className="text-xs px-2 py-1 rounded bg-emerald-400/20 hover:bg-emerald-400/30"
+                              onClick={() => quickMove(t.id, 'Concluído')}
+                            >
+                              Concluir
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                      {t.description && <p className="mt-2 text-sm text-white/80 line-clamp-3">{t.description}</p>}
+                    </article>
                   ))}
-
-                  {!loading && items.length === 0 && (
-                    <div className="text-slate-300/60 text-sm px-2 py-6">Sem tarefas.</div>
+                  {(!columns[col.key] || columns[col.key].length === 0) && (
+                    <div className="text-white/50 text-sm">Sem itens</div>
                   )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
-        <p className="text-[11px] text-slate-300/60 mt-3">Plataforma desenvolvida pela área de Gente e Cultura - T.Group - Todos os direitos reservados.</p>
-      </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </main>
 
-      {/* MODAL NOVA TAREFA */}
-      {openNew && (
-        <div className="fixed inset-0 z-50 bg-black/50 grid place-items-center p-4" onClick={() => !saving && setOpenNew(false)}>
-          <div className="w-full max-w-2xl rounded-2xl bg-white text-slate-900 p-4" onClick={(e)=>e.stopPropagation()}>
-            <div className="text-lg font-semibold mb-2">Criar tarefa</div>
+      {/* Modal Criar */}
+      {open && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 grid place-items-center p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="w-full max-w-3xl rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-lg font-semibold mb-3">Criar tarefa</div>
             <div className="grid md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
-                <input className="w-full border rounded-lg px-3 py-2" placeholder="Título"
-                  value={newTask.title || ''} onChange={e=>setNewTask(s=>({...s,title:e.target.value}))}/>
+                <label className="text-sm text-white/80">Título</label>
+                <input
+                  className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none focus:bg-white/15"
+                  value={newTask.title || ''}
+                  onChange={(e) => setNewTask((s) => ({ ...s, title: e.target.value }))}
+                  placeholder="Ex.: Convocar entrevistas finalistas"
+                />
               </div>
+
               <div className="md:col-span-2">
-                <textarea className="w-full border rounded-lg px-3 py-2 min-h-[100px]" placeholder="Descrição"
-                  value={newTask.description || ''} onChange={e=>setNewTask(s=>({...s,description:e.target.value}))}/>
+                <label className="text-sm text-white/80">Descrição</label>
+                <textarea
+                  className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none focus:bg-white/15 min-h-[100px]"
+                  value={newTask.description || ''}
+                  onChange={(e) => setNewTask((s) => ({ ...s, description: e.target.value }))}
+                  placeholder="Contexto, links e critérios de pronto."
+                />
               </div>
-              <input className="border rounded-lg px-3 py-2" placeholder="Owner"
-                value={newTask.owner || ''} onChange={e=>setNewTask(s=>({...s,owner:e.target.value}))}/>
-              <input className="border rounded-lg px-3 py-2" placeholder="Solicitante"
-                value={newTask.requester || ''} onChange={e=>setNewTask(s=>({...s,requester:e.target.value}))}/>
 
-              <select className="border rounded-lg px-3 py-2" value={newTask.area}
-                onChange={e=>setNewTask(s=>({...s,area:e.target.value}))}>
-                <option>Admissão & Demissão</option>
-                <option>Recrutamento</option>
-                <option>Facilities & Sede</option>
-                <option>Folha & DP</option>
-                <option>Benefícios</option>
-                <option>Prestação de Contas</option>
-                <option>Contratos Jurídicos</option>
-                <option>Performance & Clima</option>
-                <option>Atendimento Colab</option>
-                <option>Atendimento Sócios</option>
-                <option>Conflitos Internos</option>
-                <option>Café com T / HH / Aniversariantes</option>
-                <option>Confraternização Anual</option>
-                <option>Eventos & Palestras & Capacitações</option>
-                <option>Brindes & Datas Comemorativas</option>
-                <option>Locação / Imobiliária</option>
-                <option>Sistemas Internos (Apps)</option>
-              </select>
+              <div>
+                <label className="text-sm text-white/80">Área</label>
+                <select
+                  className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+                  value={newTask.area}
+                  onChange={(e) => setNewTask((s) => ({ ...s, area: e.target.value }))}
+                >
+                  {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
 
-              <select className="border rounded-lg px-3 py-2" value={newTask.company}
-                onChange={e=>setNewTask(s=>({...s,company:e.target.value}))}>
-                <option>T Group</option>
-                <option>T Youth — Toy Formaturas</option>
-                <option>T Youth — Neo Formaturas</option>
-                <option>Toy Interior</option>
-                <option>T Dreams</option>
-                <option>T Brands</option>
-                <option>T Venues</option>
-                <option>Mood</option>
-                <option>WAS</option>
-              </select>
+              <div>
+                <label className="text-sm text-white/80">Empresa</label>
+                <select
+                  className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+                  value={newTask.company}
+                  onChange={(e) => setNewTask((s) => ({ ...s, company: e.target.value }))}
+                >
+                  {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
 
-              <select className="border rounded-lg px-3 py-2" value={newTask.priority}
-                onChange={e=>setNewTask(s=>({...s,priority:e.target.value as any}))}>
-                <option value="P1">P1</option>
-                <option value="P2">P2</option>
-                <option value="P3">P3</option>
-                <option value="P4">P4</option>
-              </select>
+              <div>
+                <label className="text-sm text-white/80">Prioridade</label>
+                <select
+                  className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+                  value={newTask.priority}
+                  onChange={(e) => setNewTask((s) => ({ ...s, priority: e.target.value }))}
+                >
+                  {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
 
-              <select className="border rounded-lg px-3 py-2" value={newTask.impact}
-                onChange={e=>setNewTask(s=>({...s,impact:e.target.value}))}>
-                <option>Média</option>
-                <option>Alta</option>
-                <option>Baixa</option>
-              </select>
+              <div>
+                <label className="text-sm text-white/80">Impacto</label>
+                <select
+                  className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+                  value={newTask.impact}
+                  onChange={(e) => setNewTask((s) => ({ ...s, impact: e.target.value }))}
+                >
+                  {IMPACTS.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
 
-              <input type="date" className="border rounded-lg px-3 py-2"
-                value={(newTask.due_date || '').slice(0,10)}
-                onChange={e=>setNewTask(s=>({...s,due_date:new Date(e.target.value).toISOString()}))}/>
-              <input className="border rounded-lg px-3 py-2" placeholder="Labels (vírgula)"
-                value={newTask.labels || ''} onChange={e=>setNewTask(s=>({...s,labels:e.target.value}))}/>
-            </div>
+              <div>
+                <label className="text-sm text-white/80">Status</label>
+                <select
+                  className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+                  value={newTask.status}
+                  onChange={(e) => setNewTask((s) => ({ ...s, status: e.target.value }))}
+                >
+                  {KANBAN_COLUMNS.map((c) => <option key={c.key} value={c.key}>{c.title}</option>)}
+                </select>
+              </div>
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button disabled={saving} onClick={()=>!saving && setOpenNew(false)}
-                className="px-4 py-2 rounded-lg border">{saving ? '...' : 'Cancelar'}</button>
-              <button disabled={saving} onClick={handleSave}
-                className="px-4 py-2 rounded-lg bg-sky-600 text-white disabled:opacity-60">
-                {saving ? 'Salvando…' : 'Salvar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              <div>
+                <label className="text-sm text-white/80">Prazo</label>
+                <input
+                  type="date"
+                  className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+                  value={newTask.due_date || ''}
+                  onChange={(e) => setNewTask((s) => ({ ...s, due_date: e.target.value }))}
+                />
+              </div>
 
-      {/* MODAL DETALHES */}
-      {openView && (
-        <div className="fixed inset-0 z-50 bg-black/50 grid place-items-center p-4" onClick={()=>setOpenView(null)}>
-          <div className="w-full max-w-2xl rounded-2xl bg-white text-slate-900 p-4" onClick={(e)=>e.stopPropagation()}>
-            <div className="text-lg font-semibold mb-2">{openView.title}</div>
-            <div className="grid md:grid-cols-2 gap-2 text-sm">
-              <div><b>Status:</b> {openView.status}</div>
-              <div><b>Prioridade:</b> {openView.priority}</div>
-              <div><b>Owner:</b> {openView.owner || '—'}</div>
-              <div><b>Área:</b> {openView.area}</div>
-              <div><b>Empresa:</b> {openView.company}</div>
-              <div><b>Impacto:</b> {openView.impact || '—'}</div>
-              <div><b>Vence em:</b> {fmtDate(openView.due_date)}</div>
-              <div><b>Solicitante:</b> {openView.requester || '—'}</div>
-              <div className="md:col-span-2 mt-2 whitespace-pre-wrap"><b>Descrição:</b><br/>{openView.description || '—'}</div>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button onClick={()=>setOpenView(null)} className="px-4 py-2 rounded-lg border">Fechar</button>
+              <div className="md:col-span-2 flex items-center justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20"
+                  type="button"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60"
+                  type="button"
+                >
+                  {saving ? 'Salvando…' : 'Salvar'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
