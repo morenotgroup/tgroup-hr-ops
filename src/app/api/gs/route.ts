@@ -1,69 +1,56 @@
-export const runtime = "edge";
+// src/app/api/gs/route.ts
+import type { NextRequest } from 'next/server';
 
-const GS_URL = process.env.GS_WEBAPP_URL;  // sua URL /exec do Apps Script
-const GS_KEY = process.env.GS_WEBAPP_KEY;  // mesma chave do API_KEY no Script
+const GS_URL = process.env.GS_WEBAPP_URL!;
+const GS_KEY = process.env.GS_WEBAPP_KEY!;
 
-function j(data: any, status = 200) {
-  return new Response(typeof data === "string" ? data : JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
+/** Faz fetch e respeita quando o upstream não retorna JSON */
+async function fetchFromGS(
+  url: string,
+  init?: RequestInit
+): Promise<Response> {
+  const res = await fetch(url, {
+    // garante que Vercel não cacheie a lista por engano
+    cache: 'no-store',
+    ...init,
+    // 15s costuma ser suficiente para Apps Script
+    next: { revalidate: 0 },
   });
-}
 
-function withKey(url: string) {
-  if (!url) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}key=${encodeURIComponent(GS_KEY || "")}`;
-}
-
-async function forward(url: string, init?: RequestInit) {
-  if (!GS_URL) return j({ ok:false, error:"GS_WEBAPP_URL missing" }, 500);
-  if (!GS_KEY) return j({ ok:false, error:"GS_WEBAPP_KEY missing" }, 500);
-
-  try {
-    const res = await fetch(withKey(url), init);
+  const ctype = res.headers.get('content-type') || '';
+  if (ctype.includes('application/json')) {
+    const json = await res.json();
+    return Response.json(json, { status: res.status });
+  } else {
     const text = await res.text();
-    try {
-      const asJson = JSON.parse(text);
-      return j(asJson, res.status);
-    } catch {
-      // se o Apps Script respondeu HTML (login, etc.), devolvemos algo legível
-      return j({ ok:false, status: res.status, error:"non_json_from_gs", body: text.slice(0,180) }, 502);
-    }
-  } catch (e: any) {
-    return j({ ok:false, error:"edge_fetch_failed", details:String(e?.message||e) }, 502);
+    // normaliza para JSON para o front nunca quebrar em .json()
+    return Response.json(
+      { ok: false, status: res.status, error: 'upstream_non_json', body: text },
+      { status: 200 }
+    );
   }
 }
 
-export async function GET(req: Request) {
-  const u = new URL(req.url);
-  const route = u.searchParams.get("route") || "list";
-  const id    = u.searchParams.get("id") || "";
-  let url = `${GS_URL}?route=${encodeURIComponent(route)}`;
-  if (id) url += `&id=${encodeURIComponent(id)}`;
-  return forward(url);
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const route = searchParams.get('route') || 'list';
+  // adiciona key pela query (o backend também aceita pelo body)
+  const to = `${GS_URL}?route=${encodeURIComponent(route)}&key=${encodeURIComponent(GS_KEY)}`;
+  return fetchFromGS(to);
 }
 
-export async function POST(req: Request) {
-  const u = new URL(req.url);
-  let body: any = {};
-  try { body = await req.json(); } catch {}
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}));
+  const route = (body?.route || '').toLowerCase();
+  const payload = {
+    ...(body?.body || {}),
+    key: GS_KEY,
+  };
 
-  const route = body?.route || u.searchParams.get("route") || "";
-  const id    = body?.id    || u.searchParams.get("id")    || "";
-
-  const payload =
-    body?.body !== undefined ? body.body :
-    (body?.route || body?.id) === undefined ? body : {};
-
-  if (!route) return j({ ok:false, error:"route missing" }, 400);
-
-  let url = `${GS_URL}?route=${encodeURIComponent(route)}`;
-  if (id) url += `&id=${encodeURIComponent(id)}`;
-
-  return forward(url, {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify(payload ?? {}),
+  const to = `${GS_URL}?route=${encodeURIComponent(route)}`;
+  return fetchFromGS(to, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 }
