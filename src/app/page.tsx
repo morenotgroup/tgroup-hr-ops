@@ -1,300 +1,348 @@
+// src/app/page.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import Glass from "@/components/ui/Glass";
-import { CalendarDays, CheckCircle2, Clock, LayoutGrid, LayoutList, Plus, ShieldAlert, ArrowRightLeft } from "lucide-react";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, PieChart, Pie, Cell } from "recharts";
+import { useEffect, useMemo, useState } from 'react';
 
-/** ===== API base ===== */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
-
-/** ===== Constantes ===== */
-const STATUSES = ["Backlog","Em Progresso","Em Aprovação","Bloqueado","Concluído"] as const;
-const PRIORITY = {
-  P0: { label:"P0 • UTI", weight:6 },
-  P1: { label:"P1 • Alta", weight:4 },
-  P2: { label:"P2 • Média", weight:2 },
-  P3: { label:"P3 • Baixa", weight:1 },
-} as const;
-const AREAS = [
-  "Admissão & Demissão","Recrutamento","Facilities & Sede","Folha & DP","Benefícios","Prestação de Contas","Contratos Jurídicos",
-  "Performance & Clima","Atendimento Colab","Atendimento Sócios","Conflitos Internos","Café com T / HH / Aniversariantes",
-  "Confraternização Anual","Eventos & Palestras & Capacitações","Brindes & Datas Comemorativas","Locação / Imobiliária","Sistemas Internos (Apps)"
-] as const;
-const COMPANIES = ["T Group","T Youth","T Brands","T Dreams","T Venues","WAS","Mood"] as const;
-
-/** ===== Utilidades ===== */
-const fmtDate = (d?: string) => (d ? new Date(d + "T00:00:00") : undefined);
-const daysBetween = (a?: Date, b?: Date) => (a && b ? Math.floor((a.getTime() - b.getTime()) / 86400000) : 0);
-const computeDerived = (t:any) => {
-  const now = new Date();
-  const due = fmtDate(t.due_date);
-  const overdueDays = due ? Math.max(0, daysBetween(now, due) * -1) : 0;
-  const isOverdue = due ? now > due : false;
-  const priorityWeight = (PRIORITY as any)[t.priority]?.weight ?? 2;
-  const blockerWeight = t.status === "Bloqueado" ? 3 : 0;
-  const riskIndex = overdueDays * 2 + priorityWeight + blockerWeight;
-  const isUTI = t.priority === "P0" || (isOverdue && t.impact === "Alta");
-  return { overdueDays, isOverdue, riskIndex, isUTI };
+type Task = {
+  id: string;
+  title: string;
+  description: string;
+  owner: string;
+  area: string;
+  company: string;
+  priority: 'P1'|'P2'|'P3'|'P4'|string;
+  status: 'Backlog'|'Em Progresso'|'Em Aprovação'|'Bloqueado'|'Concluído'|string;
+  created_at?: string;
+  due_date?: string;
+  updated_at?: string;
+  labels?: string;
+  requester?: string;
+  impact?: string;
+  sla_hours?: string;
+  linked_docs?: string;
+  recurrence?: string;
+  last_comment?: string;
 };
 
-/** ===== Hook de dados ===== */
-function useTasks(){
-  const [tasks, setTasks]   = useState<any[]>([]);
-  const [loading, setLoad]  = useState(false);
-  const [error, setError]   = useState<string | null>(null);
+const STATUS_COLS = [
+  { key: 'Backlog',       title: 'Backlog' },
+  { key: 'Em Progresso',  title: 'Em Progresso' },
+  { key: 'Em Aprovação',  title: 'Em Aprovação' },
+  { key: 'Bloqueado',     title: 'Bloqueado' },
+  { key: 'Concluído',     title: 'Concluído' },
+] as const;
 
-  const load = async () => {
-    setLoad(true); setError(null);
-    try{
-      if (!API_BASE){
-        setTasks([]); // DEMO vazio
-      } else {
-        const res = await fetch(`${API_BASE}?route=list`, { cache:"no-store" });
-        const text = await res.text();
-        let json:any; try{ json = JSON.parse(text); } catch { throw new Error(`API inválida: ${text.slice(0,120)}`); }
-        if (!res.ok || json?.ok === false) throw new Error(json?.error || `HTTP ${res.status}`);
-        setTasks(json.data ?? []);
-      }
-    }catch(e:any){ setError(e?.message || "Falha ao carregar"); }
-    finally{ setLoad(false); }
-  };
-
-  const create = async (payload:any) => {
-    try{
-      if (!API_BASE){
-        setTasks(prev => [{ ...payload, id:`T-${(prev.length+1).toString().padStart(3,"0")}`}, ...prev]);
-        return;
-      }
-      const usingProxy = API_BASE.startsWith("/api/");
-      const url  = usingProxy ? API_BASE : `${API_BASE}?route=create`;
-      const init = usingProxy
-        ? { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ route:"create", body: payload }) }
-        : { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) };
-      const res = await fetch(url, init);
-      const json = await res.json();
-      if (!json?.ok) throw new Error(json?.error || "Falha ao criar");
-      await load();
-    }catch(e:any){ setError(e?.message || "Erro ao criar"); }
-  };
-
-  const update = async (id:string, patch:any) => {
-    try{
-      if (!API_BASE){ setTasks(prev => prev.map(t => t.id===id ? { ...t, ...patch } : t)); return; }
-      const usingProxy = API_BASE.startsWith("/api/");
-      const url  = usingProxy ? API_BASE : `${API_BASE}?route=update&id=${encodeURIComponent(id)}`;
-      const init = usingProxy
-        ? { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ route:"update", id, body: patch }) }
-        : { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(patch) };
-      const res = await fetch(url, init);
-      const json = await res.json();
-      if (!json?.ok) throw new Error(json?.error || "Falha ao atualizar");
-      await load();
-    }catch(e:any){ setError(e?.message || "Erro ao atualizar"); }
-  };
-
-  useEffect(()=>{ load(); }, []);
-  return { tasks, loading, error, reload: load, create, update };
+function fmtDate(d?: string) {
+  if (!d) return '—';
+  try {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  } catch { return '—'; }
 }
 
-/** ===== UI ===== */
-function CreateTaskModal({ onCreate }:{ onCreate:(p:any)=>void }){
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<any>({
-    priority:"P2", status:"Backlog", impact:"Média", area:AREAS[0], company:COMPANIES[0]
-  });
-  const canSave = form?.title?.trim();
+async function apiGetList(): Promise<{ ok: boolean; data: Task[]; error?: any }> {
+  const res = await fetch('/api/gs?route=list', { cache: 'no-store' });
+  const json = await res.json().catch(() => ({ ok: false, error: 'invalid_json' }));
+  return json;
+}
 
-  const save = async () => {
-    if (!canSave) return;
-    const payload = {
-      ...form,
-      created_at: new Date().toISOString().slice(0,10),
-      updated_at: new Date().toISOString().slice(0,10)
+async function apiCreate(task: Partial<Task>) {
+  const res = await fetch('/api/gs', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ route: 'create', body: task }),
+  });
+  const json = await res.json().catch(() => ({ ok: false, error: 'invalid_json' }));
+  return json;
+}
+
+export default function Page() {
+  const [list, setList] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // modal criar
+  const [openNew, setOpenNew] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newTask, setNewTask] = useState<Partial<Task>>({
+    title: '',
+    description: '',
+    owner: '',
+    area: 'Admissão & Demissão',
+    company: 'T Group',
+    priority: 'P2',
+    status: 'Backlog',
+    due_date: '',
+    requester: 'Moreno',
+    impact: 'Média',
+  });
+
+  // modal detalhes
+  const [openView, setOpenView] = useState<null | Task>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const r = await apiGetList();
+      if (r.ok) {
+        setErr(null);
+        setList(r.data || []);
+      } else {
+        // se veio upstream_non_json, mostra msg curta
+        setErr(
+          r?.error === 'upstream_non_json'
+            ? 'Erro: backend retornou conteúdo não JSON.'
+            : 'Erro ao carregar tarefas.'
+        );
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const columns = useMemo(() => {
+    const map: Record<string, Task[]> = {};
+    STATUS_COLS.forEach(c => (map[c.key] = []));
+    for (const t of list) {
+      if (!map[t.status]) map[t.status] = [];
+      map[t.status].push(t);
+    }
+    return map;
+  }, [list]);
+
+  async function handleSave() {
+    if (saving) return;
+    // validação simples
+    if (!newTask.title?.trim()) { alert('Informe um título'); return; }
+    setSaving(true);
+    const payload: Partial<Task> = {
+      ...newTask,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
-    await onCreate(payload);
-    setOpen(false);
-    // limpa formulário
-    setForm({ priority:"P2", status:"Backlog", impact:"Média", area:AREAS[0], company:COMPANIES[0] });
-  };
+    const r = await apiCreate(payload);
+    setSaving(false);
+    if (r?.ok) {
+      // reload leve
+      const again = await apiGetList();
+      if (again.ok) setList(again.data || []);
+      setOpenNew(false);
+      // limpa form
+      setNewTask({
+        title: '',
+        description: '',
+        owner: '',
+        area: 'Admissão & Demissão',
+        company: 'T Group',
+        priority: 'P2',
+        status: 'Backlog',
+        due_date: '',
+        requester: 'Moreno',
+        impact: 'Média',
+      });
+    } else {
+      alert('Falha ao salvar: ' + (r?.error || 'erro desconhecido'));
+    }
+  }
 
   return (
-    <>
-      <button className="glass glass-pressable px-4 py-2 flex items-center gap-2" onClick={()=>setOpen(true)}>
-        <Plus className="w-4 h-4"/> Nova tarefa
-      </button>
+    <div className="min-h-screen bg-[#0b1320] text-slate-100 relative">
+      {/* aurora animada */}
+      <div className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(1200px_600px_at_10%_-10%,rgba(56,189,248,.25),transparent),radial-gradient(900px_500px_at_100%_0%,rgba(139,92,246,.25),transparent),radial-gradient(1000px_600px_at_50%_120%,rgba(59,130,246,.25),transparent)] animate-[pulse_10s_ease-in-out_infinite]" />
+      </div>
 
-      {open && (
-        <div className="modal-backdrop grid place-items-center" role="dialog" aria-modal="true" onClick={()=>setOpen(false)}>
-          <Glass as="div" className="modal-card p-4 text-slate-900" soft onClick={(e)=>e.stopPropagation()}>
-            <div className="text-slate-800 text-lg font-semibold mb-3">Criar tarefa</div>
+      <header className="px-5 pt-6 pb-2 flex items-center justify-between">
+        <h1 className="text-2xl md:text-3xl font-semibold">
+          T Group • HR Ops <span className="text-sky-300">— Gente e Cultura</span>
+        </h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setOpenNew(true)}
+            className="rounded-xl px-4 py-2 bg-white/10 hover:bg-white/15 border border-white/20"
+          >
+            + Nova tarefa
+          </button>
+          <a
+            href="/"
+            className="rounded-xl px-4 py-2 bg-white/10 hover:bg-white/15 border border-white/20"
+          >
+            Dashboard
+          </a>
+        </div>
+      </header>
 
+      {/* filtros (placeholder) */}
+      <div className="px-5">
+        <div className="rounded-2xl bg-white/5 border border-white/10 p-3 grid grid-cols-1 md:grid-cols-5 gap-3">
+          <input
+            className="rounded-xl bg-white/10 border border-white/20 px-3 py-2 outline-none placeholder:text-slate-300/60"
+            placeholder="Buscar por título, descrição"
+          />
+          <select className="rounded-xl bg-white/10 border border-white/20 px-3 py-2">
+            <option>Empresa (todas)</option>
+          </select>
+          <select className="rounded-xl bg-white/10 border border-white/20 px-3 py-2">
+            <option>Área (todas)</option>
+          </select>
+          <select className="rounded-xl bg-white/10 border border-white/20 px-3 py-2">
+            <option>Prioridade (todas)</option>
+          </select>
+          <select className="rounded-xl bg-white/10 border border-white/20 px-3 py-2">
+            <option>Status (todos)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* barra de erro */}
+      {err && (
+        <div className="px-5 mt-3">
+          <div className="rounded-xl bg-red-400/15 border border-red-300/30 px-4 py-2 text-red-100">
+            {err}
+          </div>
+        </div>
+      )}
+
+      {/* KANBAN */}
+      <div className="px-5 pb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
+          {STATUS_COLS.map(col => {
+            const items = columns[col.key] || [];
+            return (
+              <div key={col.key} className="rounded-2xl bg-white/5 border border-white/10 p-2 flex flex-col">
+                <div className="px-2 py-1 text-sm text-slate-200/90 flex items-center justify-between">
+                  <span>{col.title}</span>
+                  <span className="text-xs rounded-full bg-white/10 px-2 py-0.5">{items.length}</span>
+                </div>
+
+                <div className="mt-2 grow rounded-xl bg-gradient-to-b from-white/5 to-white/0 p-2
+                                overflow-y-auto"
+                     style={{ maxHeight: 'calc(100vh - 260px)' }}>
+                  {loading && <div className="text-slate-300/70 px-2 py-4 text-sm">Carregando…</div>}
+
+                  {items.map((t) => (
+                    <div
+                      key={t.id + Math.random()} // evita conflito por IDs duplicados vindos da planilha
+                      onClick={() => setOpenView(t)}
+                      className="cursor-pointer select-none rounded-xl border border-white/10 bg-white/10 hover:bg-white/15 p-3 mb-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium">{t.title || '(sem título)'}</div>
+                        <span className="text-[11px] rounded-md bg-yellow-300/20 border border-yellow-300/30 text-yellow-200 px-2 py-0.5">
+                          {t.priority || '—'} • {t.impact || '—'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-300/80 mt-1">
+                        <div className="flex items-center gap-2">
+                          <span>📅 {fmtDate(t.due_date)}</span>
+                        </div>
+                        <div className="mt-1">Owner: <b>{t.owner || '—'}</b></div>
+                        <div className="text-[11px] opacity-70">{t.area}</div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {!loading && items.length === 0 && (
+                    <div className="text-slate-300/60 text-sm px-2 py-6">Sem tarefas.</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-slate-300/60 mt-3">Dica: fixe este painel em tela cheia na TV da sala. Use filtros por Empresa e Área.</p>
+      </div>
+
+      {/* MODAL NOVA TAREFA */}
+      {openNew && (
+        <div className="fixed inset-0 z-50 bg-black/50 grid place-items-center p-4" onClick={() => !saving && setOpenNew(false)}>
+          <div className="w-full max-w-2xl rounded-2xl bg-white text-slate-900 p-4" onClick={(e)=>e.stopPropagation()}>
+            <div className="text-lg font-semibold mb-2">Criar tarefa</div>
             <div className="grid md:grid-cols-2 gap-3">
               <div className="md:col-span-2">
-                <input className="input-ios" placeholder="Título" value={form.title||""}
-                  onChange={(e)=>setForm({ ...form, title:e.target.value })}/>
+                <input className="w-full border rounded-lg px-3 py-2" placeholder="Título"
+                  value={newTask.title || ''} onChange={e=>setNewTask(s=>({...s,title:e.target.value}))}/>
               </div>
               <div className="md:col-span-2">
-                <textarea className="textarea-ios" rows={4} placeholder="Descrição"
-                  value={form.description||""}
-                  onChange={(e)=>setForm({ ...form, description:e.target.value })}/>
+                <textarea className="w-full border rounded-lg px-3 py-2 min-h-[100px]" placeholder="Descrição"
+                  value={newTask.description || ''} onChange={e=>setNewTask(s=>({...s,description:e.target.value}))}/>
               </div>
+              <input className="border rounded-lg px-3 py-2" placeholder="Owner"
+                value={newTask.owner || ''} onChange={e=>setNewTask(s=>({...s,owner:e.target.value}))}/>
+              <input className="border rounded-lg px-3 py-2" placeholder="Solicitante"
+                value={newTask.requester || ''} onChange={e=>setNewTask(s=>({...s,requester:e.target.value}))}/>
 
-              <input className="input-ios" placeholder="Owner" value={form.owner||""}
-                onChange={(e)=>setForm({ ...form, owner:e.target.value })}/>
-              <input className="input-ios" placeholder="Solicitante" value={form.requester||""}
-                onChange={(e)=>setForm({ ...form, requester:e.target.value })}/>
-
-              <select className="select-ios" value={form.area} onChange={(e)=>setForm({ ...form, area:e.target.value })}>
-                {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-              <select className="select-ios" value={form.company} onChange={(e)=>setForm({ ...form, company:e.target.value })}>
-                {COMPANIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-
-              <select className="select-ios" value={form.priority} onChange={(e)=>setForm({ ...form, priority:e.target.value })}>
-                {Object.entries(PRIORITY).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-              </select>
-              <select className="select-ios" value={form.impact} onChange={(e)=>setForm({ ...form, impact:e.target.value })}>
-                <option>Alta</option><option>Média</option><option>Baixa</option>
+              <select className="border rounded-lg px-3 py-2" value={newTask.area}
+                onChange={e=>setNewTask(s=>({...s,area:e.target.value}))}>
+                <option>Admissão & Demissão</option>
+                <option>Recrutamento</option>
+                <option>Folha</option>
+                <option>Facilities</option>
               </select>
 
-              <input type="date" className="input-ios"
-                value={form.due_date||""} onChange={(e)=>setForm({ ...form, due_date:e.target.value })}/>
-              <input className="input-ios" placeholder="Labels (vírgula)" value={form.labels||""}
-                onChange={(e)=>setForm({ ...form, labels:e.target.value })}/>
+              <select className="border rounded-lg px-3 py-2" value={newTask.company}
+                onChange={e=>setNewTask(s=>({...s,company:e.target.value}))}>
+                <option>T Group</option>
+                <option>T Dreams</option>
+                <option>T Youth</option>
+                <option>WAS</option>
+              </select>
+
+              <select className="border rounded-lg px-3 py-2" value={newTask.priority}
+                onChange={e=>setNewTask(s=>({...s,priority:e.target.value as any}))}>
+                <option value="P1">P1</option>
+                <option value="P2">P2</option>
+                <option value="P3">P3</option>
+                <option value="P4">P4</option>
+              </select>
+
+              <select className="border rounded-lg px-3 py-2" value={newTask.impact}
+                onChange={e=>setNewTask(s=>({...s,impact:e.target.value}))}>
+                <option>Média</option>
+                <option>Alta</option>
+                <option>Baixa</option>
+              </select>
+
+              <input type="date" className="border rounded-lg px-3 py-2"
+                value={(newTask.due_date || '').slice(0,10)}
+                onChange={e=>setNewTask(s=>({...s,due_date:new Date(e.target.value).toISOString()}))}/>
+              <input className="border rounded-lg px-3 py-2" placeholder="Labels (vírgula)"
+                value={newTask.labels || ''} onChange={e=>setNewTask(s=>({...s,labels:e.target.value}))}/>
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" className="btn-ghost" onClick={()=>setOpen(false)}>Cancelar</button>
-              <button type="button" className="btn" onClick={save} disabled={!canSave}>Salvar</button>
+              <button disabled={saving} onClick={()=>!saving && setOpenNew(false)}
+                className="px-4 py-2 rounded-lg border">{saving ? '...' : 'Cancelar'}</button>
+              <button disabled={saving} onClick={handleSave}
+                className="px-4 py-2 rounded-lg bg-sky-600 text-white disabled:opacity-60">
+                {saving ? 'Salvando…' : 'Salvar'}
+              </button>
             </div>
-          </Glass>
+          </div>
         </div>
       )}
-    </>
-  );
-}
 
-function StatusColumn({ status, items, onDrop } : any){
-  return (
-    <Glass className="p-3 min-h-[60vh] text-slate-900" soft
-      onDragOver={(e:any)=>e.preventDefault()}
-      onDrop={(e:any)=>{ const id = e.dataTransfer.getData("text/plain"); if (id) onDrop(id, status); }}>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="font-semibold text-white/90">{status}</h3>
-        <span className="text-xs px-2 py-1 rounded-full bg-white/15 border border-white/30 text-white/90">{items.length}</span>
-      </div>
-      <div className="space-y-3">
-        {items.map((t:any)=>(
-          <div key={t.id} draggable onDragStart={(e)=>e.dataTransfer.setData("text/plain", t.id)}>
-            <motion.div layout className={`rounded-xl border border-white/35 p-3 bg-white/85 ${t._derived.isUTI ? "ring-2 ring-red-500/50" : ""}`}>
-              <div className="flex items-center justify-between">
-                <div className="font-medium text-slate-900 pr-2">{t.title}</div>
-                <span className={`text-xs px-2 py-1 rounded-full ${
-                  t.priority==="P0"?"bg-red-100 text-red-700":
-                  t.priority==="P1"?"bg-orange-100 text-orange-700":
-                  t.priority==="P2"?"bg-yellow-100 text-yellow-700":"bg-gray-100 text-gray-700"}`}>
-                  {(PRIORITY as any)[t.priority]?.label || t.priority}
-                </span>
-              </div>
-              <div className="text-xs text-slate-700 mt-1 line-clamp-2">{t.description}</div>
-              <div className="mt-2 flex items-center gap-2 text-xs">
-                <span className={`px-2 py-1 rounded-full ${t._derived.isOverdue ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
-                  <CalendarDays className="w-3 h-3 inline mr-1"/>{t.due_date || "s/ prazo"}
-                </span>
-                {t._derived.isUTI && (
-                  <span className="px-2 py-1 rounded-full bg-red-600 text-white text-xs">
-                    <ShieldAlert className="w-3 h-3 inline mr-1"/>UTI
-                  </span>
-                )}
-              </div>
-              <div className="mt-2 flex items-center justify-between text-xs text-slate-700">
-                <span>Owner: <b>{t.owner||"-"}</b></span>
-                <span>{t.area}</span>
-              </div>
-            </motion.div>
+      {/* MODAL DETALHES */}
+      {openView && (
+        <div className="fixed inset-0 z-50 bg-black/50 grid place-items-center p-4" onClick={()=>setOpenView(null)}>
+          <div className="w-full max-w-2xl rounded-2xl bg-white text-slate-900 p-4" onClick={(e)=>e.stopPropagation()}>
+            <div className="text-lg font-semibold mb-2">{openView.title}</div>
+            <div className="grid md:grid-cols-2 gap-2 text-sm">
+              <div><b>Status:</b> {openView.status}</div>
+              <div><b>Prioridade:</b> {openView.priority}</div>
+              <div><b>Owner:</b> {openView.owner || '—'}</div>
+              <div><b>Área:</b> {openView.area}</div>
+              <div><b>Empresa:</b> {openView.company}</div>
+              <div><b>Impacto:</b> {openView.impact || '—'}</div>
+              <div><b>Vence em:</b> {fmtDate(openView.due_date)}</div>
+              <div><b>Solicitante:</b> {openView.requester || '—'}</div>
+              <div className="md:col-span-2 mt-2 whitespace-pre-wrap"><b>Descrição:</b><br/>{openView.description || '—'}</div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={()=>setOpenView(null)} className="px-4 py-2 rounded-lg border">Fechar</button>
+            </div>
           </div>
-        ))}
-      </div>
-    </Glass>
-  );
-}
-
-export default function App(){
-  const { tasks, loading, error, create, update } = useTasks();
-  const [query, setQuery] = useState("");
-  const [view, setView]  = useState<"kanban"|"dashboard">("kanban");
-  const [filters, setFilters] = useState<any>({ company:"", area:"", priority:"", status:"" });
-
-  const computed = useMemo(()=>{
-    const withD = tasks.map(t=>({ ...t, _derived: computeDerived(t) }));
-    const byStatus: Record<string, any[]> = {}; STATUSES.forEach(s=>byStatus[s]=[]);
-    const filtered = withD.filter(t => {
-      const match =
-        (!filters.company || t.company===filters.company) &&
-        (!filters.area || t.area===filters.area) &&
-        (!filters.priority || t.priority===filters.priority) &&
-        (!filters.status || t.status===filters.status) &&
-        (!query || `${t.title} ${t.description} ${t.labels}`.toLowerCase().includes(query.toLowerCase()));
-      return match;
-    });
-    filtered.forEach(t=>byStatus[t.status]?.push(t));
-    return { byStatus, filtered };
-  }, [tasks, query, filters]);
-
-  const moveTask = (id:string, newStatus:string) => {
-    const t = tasks.find(x=>x.id===id); if (!t || t.status===newStatus) return;
-    update(id, { status:newStatus, updated_at: new Date().toISOString().slice(0,10) });
-  };
-
-  return (
-    <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-            T Group • HR Ops <span className="ml-3 text-sky-200/95 text-xl md:text-2xl font-normal">— Gente e Cultura</span>
-          </h1>
-          <p className="text-sm text-white/85">Painel unificado: demandas, riscos e prioridades (modo {API_BASE? "PROD":"DEMO"}).</p>
         </div>
-        <div className="flex items-center gap-2">
-          <CreateTaskModal onCreate={create}/>
-          <button className="glass px-3 py-2 flex items-center gap-2" onClick={()=>setView(view==="dashboard"?"kanban":"dashboard")}>
-            {view==="dashboard" ? (<><LayoutList className="w-4 h-4"/>Kanban</>) : (<><LayoutGrid className="w-4 h-4"/>Dashboard</>)}
-          </button>
-        </div>
-      </div>
-
-      <Glass className="mb-4 p-4">
-        <div className="grid md:grid-cols-6 gap-2 text-slate-900">
-          <input className="input-ios" placeholder="Buscar por título, descrição ou labels" value={query} onChange={(e)=>setQuery(e.target.value)}/>
-          <select className="select-ios" onChange={(e)=>setFilters({ ...filters, company:e.target.value })} defaultValue="">
-            <option value="">Empresa (todas)</option>{COMPANIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select className="select-ios" onChange={(e)=>setFilters({ ...filters, area:e.target.value })} defaultValue="">
-            <option value="">Área (todas)</option>{AREAS.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <select className="select-ios" onChange={(e)=>setFilters({ ...filters, priority:e.target.value })} defaultValue="">
-            <option value="">Prioridade (todas)</option>{Object.entries(PRIORITY).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
-          </select>
-          <select className="select-ios" onChange={(e)=>setFilters({ ...filters, status:e.target.value })} defaultValue="">
-            <option value="">Status (todos)</option>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <button className="btn-ghost" onClick={()=>{ setFilters({}); setQuery(""); }}>
-            <span className="inline-flex items-center gap-2"><ArrowRightLeft className="w-4 h-4"/>Limpar</span>
-          </button>
-        </div>
-      </Glass>
-
-      {error && <div className="glass p-3 mb-3 text-red-200 border border-red-400/50 bg-red-900/20">Erro: {String(error)}</div>}
-
-      {/* Kanban */}
-      <div className="grid md:grid-cols-5 gap-3">
-        {STATUSES.map(s => <StatusColumn key={s} status={s} items={computed.byStatus[s]||[]} onDrop={moveTask}/>)}
-      </div>
-
-      <div className="mt-6 text-xs text-white/85">Dica: Fixe este painel em tela cheia na TV da sala. Use filtros por Empresa e Área.</div>
+      )}
     </div>
   );
 }
