@@ -1,56 +1,50 @@
 // src/app/api/gs/route.ts
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-const GS_URL = process.env.GS_WEBAPP_URL!;
-const GS_KEY = process.env.GS_WEBAPP_KEY!;
+export const runtime = "edge"; // mais rápido na Vercel
 
-/** Faz fetch e respeita quando o upstream não retorna JSON */
-async function fetchFromGS(
-  url: string,
-  init?: RequestInit
-): Promise<Response> {
-  const res = await fetch(url, {
-    // garante que Vercel não cacheie a lista por engano
-    cache: 'no-store',
-    ...init,
-    // 15s costuma ser suficiente para Apps Script
-    next: { revalidate: 0 },
-  });
+const WEBAPP = process.env.GS_WEBAPP_URL!; // ex.: https://script.google.com/macros/s/AKfy.../exec
+const KEY    = process.env.GS_WEBAPP_KEY!; // ex.: tgroup_hrops_9eC3ZqFvK7
 
-  const ctype = res.headers.get('content-type') || '';
-  if (ctype.includes('application/json')) {
-    const json = await res.json();
-    return Response.json(json, { status: res.status });
-  } else {
-    const text = await res.text();
-    // normaliza para JSON para o front nunca quebrar em .json()
-    return Response.json(
-      { ok: false, status: res.status, error: 'upstream_non_json', body: text },
-      { status: 200 }
-    );
-  }
+function bad(msg: string, status = 200, body = "") {
+  return NextResponse.json({ ok: false, status, error: msg, body: body.slice(0, 200) });
 }
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const route = searchParams.get('route') || 'list';
-  // adiciona key pela query (o backend também aceita pelo body)
-  const to = `${GS_URL}?route=${encodeURIComponent(route)}&key=${encodeURIComponent(GS_KEY)}`;
-  return fetchFromGS(to);
+  try {
+    const url = new URL(req.url);
+    url.searchParams.set("key", KEY); // injeta a key no GET
+    const target = `${WEBAPP}?${url.searchParams.toString()}`;
+
+    const res  = await fetch(target, { method: "GET", headers: { "cache-control": "no-cache" }});
+    const text = await res.text();
+    try { return NextResponse.json(JSON.parse(text)); }
+    catch { return bad("non_json_from_gs", res.status, text); }
+  } catch (e: any) {
+    return bad(String(e));
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}));
-  const route = (body?.route || '').toLowerCase();
-  const payload = {
-    ...(body?.body || {}),
-    key: GS_KEY,
-  };
+  try {
+    const url = new URL(req.url);
+    const route = url.searchParams.get("route") ?? "create";
 
-  const to = `${GS_URL}?route=${encodeURIComponent(route)}`;
-  return fetchFromGS(to, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+    let body: any = {};
+    try { body = await req.json(); } catch { body = {}; }
+
+    const payload = JSON.stringify({ ...body, key: KEY }); // injeta a key no POST
+    const target  = `${WEBAPP}?route=${encodeURIComponent(route)}`;
+
+    const res  = await fetch(target, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload
+    });
+    const text = await res.text();
+    try { return NextResponse.json(JSON.parse(text)); }
+    catch { return bad("non_json_from_gs", res.status, text); }
+  } catch (e: any) {
+    return bad(String(e));
+  }
 }
