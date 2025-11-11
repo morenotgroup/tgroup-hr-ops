@@ -249,7 +249,7 @@ export default function Page() {
             );
           })}
         </div>
-        <p className="text-[11px] text-slate-300/60 mt-3">Dica: fixe este painel em tela cheia na TV da sala. Use filtros por Empresa e Área.</p>
+        <p className="text-[11px] text-slate-300/60 mt-3">Plataforma desenvolvida pela área de Gente e Cultura - T.Group - Todos os direitos reservados.</p>
       </div>
 
       {/* MODAL NOVA TAREFA */}
@@ -275,15 +275,33 @@ export default function Page() {
                 onChange={e=>setNewTask(s=>({...s,area:e.target.value}))}>
                 <option>Admissão & Demissão</option>
                 <option>Recrutamento</option>
-                <option>Folha</option>
-                <option>Facilities</option>
+                <option>Facilities & Sede</option>
+                <option>Folha & DP</option>
+                <option>Benefícios</option>
+                <option>Prestação de Contas</option>
+                <option>Contratos Jurídicos</option>
+                <option>Performance & Clima</option>
+                <option>Atendimento Colab</option>
+                <option>Atendimento Sócios</option>
+                <option>Conflitos Internos</option>
+                <option>Café com T / HH / Aniversariantes</option>
+                <option>Confraternização Anual</option>
+                <option>Eventos & Palestras & Capacitações</option>
+                <option>Brindes & Datas Comemorativas</option>
+                <option>Locação / Imobiliária</option>
+                <option>Sistemas Internos (Apps)</option>
               </select>
 
               <select className="border rounded-lg px-3 py-2" value={newTask.company}
                 onChange={e=>setNewTask(s=>({...s,company:e.target.value}))}>
                 <option>T Group</option>
+                <option>T Youth — Toy Formaturas</option>
+                <option>T Youth — Neo Formaturas</option>
+                <option>Toy Interior</option>
                 <option>T Dreams</option>
-                <option>T Youth</option>
+                <option>T Brands</option>
+                <option>T Venues</option>
+                <option>Mood</option>
                 <option>WAS</option>
               </select>
 
