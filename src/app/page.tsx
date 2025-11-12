@@ -1,526 +1,584 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-/** =========================
- *  Config & utils
- *  ========================= */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/gs';
 
-type Priority = 'P1' | 'P2' | 'P3';
-type StatusGC = 'Backlog' | 'Em Progresso' | 'Aguardando' | 'UTI' | 'Concluído';
-
-export interface Task {
+/** ===== Tipos ===== */
+type Task = {
   id?: string;
-  title: string;
+  title?: string;
   description?: string;
   owner?: string;
   requester?: string;
-  area?: string;
   company?: string;
-  priority?: Priority;              // P1/P2/P3
-  impact?: 'Alta' | 'Média' | 'Baixa';
-  status?: StatusGC;
-  created_at?: string;
-  due_date?: string;                // ISO
-  updated_at?: string;
+  area?: string;
+  // no backend guardamos P1/P2/P3
+  priority?: 'P1' | 'P2' | 'P3' | string;
+  // fluxo
+  status?: 'Aguardando' | 'Em Progresso' | 'UTI' | 'Concluído' | string;
+  due_date?: string; // ISO yyyy-mm-dd
   labels?: string;
-  sla_hours?: string;
-  linked_docs?: string;
-  recurrence?: string;
-  last_comment?: string;
-}
-
-const PRIORITIES: Priority[] = ['P1', 'P2', 'P3'];
-const STATUS_COLUMNS: StatusGC[] = ['Backlog', 'Em Progresso', 'Aguardando', 'UTI', 'Concluído'];
-
-const priorityText = (p?: string) =>
-  p === 'P1' ? 'Alta' : p === 'P2' ? 'Média' : 'Baixa';
-
-const isoToInputDate = (iso?: string) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  // yyyy-MM-dd
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  created_at?: string;
+  updated_at?: string;
 };
 
-const inputDateToISO = (d?: string) => (d ? new Date(d + 'T00:00:00').toISOString() : '');
-
-/** =========================
- *  Glass helpers
- *  ========================= */
-const glass = 'bg-white/10 border border-white/20 backdrop-blur-xl shadow-[0_8px_40px_rgba(0,0,0,.35)]';
-const glassSoft = 'bg-white/12 border border-white/15 backdrop-blur-xl';
-
-/** =========================
- *  API
- *  ========================= */
-async function apiList(): Promise<Task[]> {
-  const r = await fetch(`${API_BASE}?route=list`, { cache: 'no-store' });
-  const js = await r.json();
-  if (!js.ok) throw new Error(js.error || 'Erro ao listar');
-  return js.data as Task[];
+/** ===== Helpers de API via proxy ===== */
+async function asJsonSafe(res: Response) {
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    const text = await res.text();
+    throw new Error(`Resposta não JSON do proxy: ${text.slice(0, 120)}…`);
+  }
+  return res.json();
 }
 
-async function apiCreate(t: Task): Promise<string> {
+async function apiList() {
+  const r = await fetch(`${API_BASE}?route=list`, { cache: 'no-store' });
+  return asJsonSafe(r);
+}
+async function apiCreate(task: Task) {
   const r = await fetch(`${API_BASE}?route=create`, {
     method: 'POST',
-    body: JSON.stringify(t),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(task),
   });
-  const js = await r.json();
-  if (!js.ok) throw new Error(js.error || 'Erro ao criar');
-  return js.id as string;
+  return asJsonSafe(r);
 }
-
-async function apiUpdate(id: string, patch: Partial<Task>): Promise<void> {
+async function apiUpdate(id: string, patch: Partial<Task>) {
   const r = await fetch(`${API_BASE}?route=update&id=${encodeURIComponent(id)}`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   });
-  const js = await r.json();
-  if (!js.ok) throw new Error(js.error || 'Erro ao atualizar');
+  return asJsonSafe(r);
 }
-
-async function apiDelete(id: string): Promise<void> {
+async function apiDelete(id: string) {
   const r = await fetch(`${API_BASE}?route=delete&id=${encodeURIComponent(id)}`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
   });
-  const js = await r.json();
-  if (!js.ok) throw new Error(js.error || 'Erro ao excluir');
+  return asJsonSafe(r);
 }
 
-async function apiWipe(): Promise<void> {
-  const r = await fetch(`${API_BASE}?route=wipe`, { method: 'POST' });
-  const js = await r.json();
-  if (!js.ok) throw new Error(js.error || 'Erro ao limpar');
-}
+/** ===== Constantes de UI ===== */
+const COMPANIES = [
+  'T Group',
+  'T Youth — Toy Formaturas',
+  'T Youth — Neo Formaturas',
+  'T Dreams',
+  'T Brands',
+  'T Venues',
+  'Mood',
+  'WAS',
+];
 
-/** =========================
- *  Main Page
- *  ========================= */
+const AREAS = [
+  'Admissão & Demissão',
+  'Recrutamento',
+  'Folha',
+  'Facilities',
+  'Benefícios & Parcerias',
+  'Onboarding',
+  'Políticas & Compliance',
+  'Cultura & Eventos',
+  'Desenvolvimento & Treinamento',
+  'Facilities — Limpeza',
+  'Facilities — Cozinha',
+  'Facilities — Estoque de Bebidas',
+  'Jurídico (pessoal)',
+  'Financeiro (pessoal)',
+];
+
+// UI mostra texto; persistimos P1/P2/P3
+const PRIORITY_UI = [
+  { label: 'Alta', value: 'P1' },
+  { label: 'Média', value: 'P2' },
+  { label: 'Baixa', value: 'P3' },
+] as const;
+
+const COLUMNS = [
+  { key: 'Aguardando', title: 'Aguardando' },
+  { key: 'Em Progresso', title: 'Em Progresso' },
+  { key: 'UTI', title: 'UTI' },
+  { key: 'Concluído', title: 'Concluído' },
+] as const;
+type ColumnKey = typeof COLUMNS[number]['key'];
+
+/** ===== Página ===== */
 export default function Page() {
+  const [view, setView] = useState<'kanban' | 'dashboard'>('kanban');
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
 
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Task | null>(null);
-  const isEditing = !!draft?.id;
-
+  // criar
+  const [openCreate, setOpenCreate] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [createTask, setCreateTask] = useState<Task>({
+    title: '',
+    description: '',
+    owner: 'Moreno',
+    requester: 'Moreno',
+    company: COMPANIES[0],
+    area: AREAS[0],
+    priority: 'P2', // UI mostra “Média”
+    status: 'Aguardando',
+    due_date: '',
+    labels: '',
+  });
 
-  const refresh = async () => {
-    setLoading(true);
-    setErr(null);
-    try {
-      const data = await apiList();
-      setTasks(data);
-    } catch (e: any) {
-      setErr(String(e.message || e));
-    } finally {
-      setLoading(false);
-    }
-  };
+  // editar
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     refresh();
   }, []);
 
-  const grouped = useMemo(() => {
-    const map: Record<StatusGC, Task[]> = {
-      'Backlog': [],
-      'Em Progresso': [],
-      'Aguardando': [],
-      'UTI': [],
-      'Concluído': [],
-    };
-    tasks.forEach(t => {
-      const col = (t.status as StatusGC) || 'Backlog';
-      (map[col] ?? map['Backlog']).push(t);
-    });
-    return map;
+  async function refresh() {
+    setLoading(true);
+    try {
+      const res = await apiList();
+      if (res.ok) setTasks(res.data || []);
+      else alert(`Erro ao listar: ${res.error || 'desconhecido'}`);
+    } catch (e: any) {
+      alert(`Falha ao listar: ${String(e)}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /** Agrupar por coluna */
+  const byCol = useMemo(() => {
+    const m: Record<string, Task[]> = {};
+    COLUMNS.forEach(c => (m[c.key] = []));
+    for (const t of tasks) {
+      const key = (t.status as ColumnKey) || 'Aguardando';
+      if (!m[key]) m[key] = [];
+      m[key].push(t);
+    }
+    return m;
   }, [tasks]);
 
-  /** ---------- Handlers ---------- */
-  const openCreate = () => {
-    setDraft({
-      title: '',
-      description: '',
-      owner: '',
-      requester: 'Moreno',
-      area: '',
-      company: '',
-      priority: 'P2',
-      impact: 'Média',
-      status: 'Backlog',
-      due_date: '',
-      labels: '',
-    });
-    setOpen(true);
-  };
+  /** Drag and drop */
+  function onDragStart(e: React.DragEvent, taskId?: string) {
+    if (!taskId) return;
+    e.dataTransfer.setData('text/plain', taskId);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+  async function onDrop(e: React.DragEvent, dest: ColumnKey) {
+    e.preventDefault();
+    const id = e.dataTransfer.getData('text/plain');
+    if (!id) return;
+    const res = await apiUpdate(id, { status: dest });
+    if (!res.ok) return alert(`Falha ao mover: ${res.error || 'erro'}`);
+    refresh();
+  }
 
-  const openEdit = (t: Task) => {
-    setDraft({ ...t });
-    setOpen(true);
-  };
-
-  const handleSave = async () => {
-    if (!draft) return;
+  /** Criar */
+  async function handleCreate() {
+    if (!createTask.title?.trim()) {
+      alert('Preencha o título.');
+      return;
+    }
+    setSaving(true);
     try {
-      setSaving(true);
-      const payload: Task = {
-        ...draft,
-        // normaliza datas
-        due_date: inputDateToISO(isoToInputDate(draft.due_date) || (draft as any)._due_input),
-      };
-
-      if (draft.id) {
-        await apiUpdate(draft.id, payload);
-      } else {
-        const id = await apiCreate(payload);
-        payload.id = id;
+      const res = await apiCreate({ ...createTask, title: createTask.title.trim() });
+      if (!res.ok) {
+        alert(`Falha ao salvar: ${res.error || 'erro'}`);
+        return;
       }
-
-      setOpen(false);
-      setDraft(null);
-      await refresh();
+      setOpenCreate(false);
+      setCreateTask({
+        title: '',
+        description: '',
+        owner: 'Moreno',
+        requester: 'Moreno',
+        company: COMPANIES[0],
+        area: AREAS[0],
+        priority: 'P2',
+        status: 'Aguardando',
+        due_date: '',
+        labels: '',
+      });
+      refresh();
     } catch (e: any) {
-      alert(`Falha ao salvar: ${e.message || e}`);
+      alert(`Falha ao salvar: ${String(e)}`);
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  const handleDelete = async () => {
-    if (!draft?.id) return;
-    if (!confirm(`Excluir a tarefa ${draft.title}?`)) return;
+  /** Abrir edição */
+  function openEditModal(t: Task) {
+    setEditTask({ ...t });
+    setOpenEdit(true);
+  }
+
+  /** Atualizar (salvar edição) */
+  async function handleUpdate() {
+    if (!editTask?.id) return;
+    setUpdating(true);
     try {
-      setSaving(true);
-      await apiDelete(draft.id);
-      setOpen(false);
-      setDraft(null);
-      await refresh();
+      const { id, ...patch } = editTask;
+      const res = await apiUpdate(id!, patch);
+      if (!res.ok) return alert(`Falha ao atualizar: ${res.error || 'erro'}`);
+      setOpenEdit(false);
+      setEditTask(null);
+      refresh();
     } catch (e: any) {
-      alert(`Falha ao excluir: ${e.message || e}`);
+      alert(`Falha ao atualizar: ${String(e)}`);
     } finally {
-      setSaving(false);
+      setUpdating(false);
     }
-  };
+  }
 
-  const setStatus = async (t: Task, status: StatusGC) => {
-    try {
-      await apiUpdate(t.id!, { status });
-      await refresh();
-    } catch (e: any) {
-      alert(`Falha ao mover: ${e.message || e}`);
-    }
-  };
+  /** Concluir atalho */
+  async function quickDone(id?: string) {
+    if (!id) return;
+    const res = await apiUpdate(id, { status: 'Concluído' });
+    if (!res.ok) return alert(`Falha ao concluir: ${res.error || 'erro'}`);
+    refresh();
+  }
 
-  const wipeAll = async () => {
-    if (!confirm('Apagar TODAS as tarefas? Esta ação não pode ser desfeita.')) return;
-    try {
-      await apiWipe();
-      await refresh();
-    } catch (e: any) {
-      alert(`Falha ao limpar: ${e.message || e}`);
-    }
-  };
+  /** Excluir */
+  async function handleDelete() {
+    if (!editTask?.id) return;
+    if (!confirm('Tem certeza que deseja excluir esta tarefa?')) return;
+    const res = await apiDelete(editTask.id);
+    if (!res.ok) return alert(`Falha ao excluir: ${res.error || 'erro'}`);
+    setOpenEdit(false);
+    setEditTask(null);
+    refresh();
+  }
 
-  /** ---------- UI ---------- */
   return (
-    <div className="min-h-screen text-slate-100 relative overflow-hidden">
-      {/* Liquid Glass background (intenso) */}
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 opacity-90" id="lg-layer" />
-      </div>
+    <div className="min-h-screen text-white liquid-bg">
+      {/* Topbar */}
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-black/20 border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="text-xs tracking-wider text-white/80 uppercase">Gente e Cultura</div>
+            <div className="text-lg font-semibold">HR Ops</div>
+          </div>
 
-      {/* Header */}
-      <header className="px-6 pt-6 pb-3">
-        <div className={`mx-auto max-w-[1400px] ${glass} rounded-2xl px-5 py-4`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-baseline gap-3">
-              <div className="text-xs tracking-widest opacity-80">GENTE E CULTURA</div>
-              <div className="text-2xl font-semibold">HR Ops</div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => alert('Dashboard ainda não implementado — deixamos o gancho pronto.')}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 transition"
-                title="Dashboard"
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={openCreate}
-                className="px-4 py-2 rounded-xl bg-indigo-500/80 hover:bg-indigo-600 transition"
-              >
-                + Criar tarefa
-              </button>
-              <button
-                onClick={wipeAll}
-                className="px-4 py-2 rounded-xl bg-rose-500/80 hover:bg-rose-600 transition"
-                title="Apagar todas as tarefas"
-              >
-                Limpar tudo
-              </button>
-            </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setView(v => (v === 'kanban' ? 'dashboard' : 'kanban'))}
+              className="px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 transition"
+            >
+              {view === 'kanban' ? 'Dashboard' : 'Voltar ao Kanban'}
+            </button>
+            <button
+              onClick={() => setOpenCreate(true)}
+              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 transition"
+            >
+              + Criar tarefa
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Error banner */}
-      {err && (
-        <div className="px-6">
-          <div className="mx-auto max-w-[1400px] mt-3 rounded-xl bg-rose-500/20 border border-rose-400/30 px-4 py-2 text-sm">
-            Erro: {err}
-          </div>
-        </div>
-      )}
-
-      {/* Board */}
-      <main className="px-6 pb-8">
-        <div className="mx-auto max-w-[1400px] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {STATUS_COLUMNS.map((col) => (
-            <section key={col} className={`${glassSoft} rounded-2xl p-3 flex flex-col min-h-[70vh]`}>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-semibold tracking-wide opacity-90">{col}</h2>
-                <span className="text-[11px] opacity-70">{grouped[col].length}</span>
-              </div>
-
-              <div className="flex-1 overflow-y-auto pr-2 space-y-3">
-                {loading && grouped[col].length === 0 ? (
-                  <div className="text-sm opacity-60">Carregando…</div>
-                ) : grouped[col].length === 0 ? (
-                  <div className="text-sm opacity-50">Sem itens.</div>
-                ) : (
-                  grouped[col].map((t) => (
+      {/* Conteúdo */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {view === 'dashboard' ? (
+          <Dashboard tasks={tasks} loading={loading} />
+        ) : loading ? (
+          <div className="text-white/80">Carregando…</div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {COLUMNS.map((col) => (
+              <section
+                key={col.key}
+                className="flex flex-col rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl"
+                onDragOver={onDragOver}
+                onDrop={(e) => onDrop(e, col.key)}
+              >
+                <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                  <h2 className="font-semibold">{col.title}</h2>
+                  <span className="text-sm text-white/70">{byCol[col.key]?.length ?? 0}</span>
+                </div>
+                <div className="p-3 space-y-3 h-[calc(100vh-240px)] overflow-y-auto">
+                  {(byCol[col.key] || []).map((t) => (
                     <article
                       key={t.id}
-                      className={`rounded-xl px-3 py-2 cursor-pointer ${glass} hover:bg-white/14 transition`}
-                      onClick={() => openEdit(t)}
+                      draggable
+                      onDragStart={(e) => onDragStart(e, t.id)}
+                      onClick={() => openEditModal(t)}
+                      className="rounded-xl border border-white/10 bg-white/10 p-3 cursor-pointer hover:bg-white/15 transition"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="text-[13px] font-semibold line-clamp-1">{t.title}</div>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-white/15">
-                          {priorityText(t.priority)}
-                        </span>
-                      </div>
-
-                      <div className="text-[11px] opacity-80 mt-1">
-                        {(t.company || '—')} • {(t.area || '—')}
-                      </div>
-
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="text-[11px] opacity-70">
-                          Prazo:{' '}
-                          {isoToInputDate(t.due_date) || '—'}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="font-medium">{t.title}</div>
+                          <div className="text-sm text-white/70">
+                            {t.company} • {t.area}
+                          </div>
+                          {t.due_date && (
+                            <div className="text-xs text-white/60">
+                              Prazo: {new Date(t.due_date).toLocaleDateString('pt-BR')}
+                            </div>
+                          )}
                         </div>
-
-                        {col !== 'Concluído' && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setStatus(t, 'Concluído');
-                            }}
-                            className="text-[11px] px-2 py-1 rounded bg-emerald-500/80 hover:bg-emerald-600"
-                          >
-                            Concluir
-                          </button>
-                        )}
+                        <div className="flex flex-col gap-2 items-end">
+                          <span className="text-xs px-2 py-1 rounded bg-white/15">
+                            {/* rótulo bonito p/ prioridade */}
+                            {PRIORITY_UI.find(p => p.value === t.priority)?.label ?? t.priority}
+                          </span>
+                          {t.id && t.status !== 'Concluído' && (
+                            <button
+                              className="text-xs px-2 py-1 rounded bg-emerald-400/20 hover:bg-emerald-400/30"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                quickDone(t.id);
+                              }}
+                            >
+                              Concluir
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      {t.description && <p className="mt-2 text-sm text-white/80 line-clamp-3">{t.description}</p>}
                     </article>
-                  ))
-                )}
-              </div>
-            </section>
-          ))}
-        </div>
-
-        {/* Rodapé */}
-        <div className="mx-auto max-w-[1400px] mt-6 text-[11px] opacity-70 px-2">
-          Plataforma desenvolvida pela área de Gente e Cultura — T.Group — todos os direitos reservados.
-        </div>
+                  ))}
+                  {(!byCol[col.key] || byCol[col.key].length === 0) && (
+                    <div className="text-white/50 text-sm">Sem itens</div>
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
       </main>
 
-      {/* Modal Criar/Editar */}
-      {open && draft && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 grid place-items-center p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className={`w-full max-w-2xl ${glass} rounded-2xl p-5`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-lg font-semibold mb-3">
-              {isEditing ? 'Editar tarefa' : 'Criar tarefa'}
-            </div>
+      {/* Footer */}
+      <footer className="px-4 py-6 text-center text-white/70">
+        Plataforma desenvolvida pela área de <b>Gente e Cultura</b> — <b>T.Group</b>. Todos os direitos reservados.
+      </footer>
 
-            <div className="grid md:grid-cols-2 gap-3">
-              <div className="md:col-span-2">
-                <label className="text-xs opacity-70">Título</label>
-                <input
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={draft.title}
-                  onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                />
-              </div>
+      {/* Modal Criar */}
+      {openCreate && (
+        <Modal onClose={() => setOpenCreate(false)}>
+          <div className="text-lg font-semibold mb-3">Criar tarefa</div>
+          <TaskForm
+            task={createTask}
+            onChange={setCreateTask}
+            submitLabel={saving ? 'Salvando…' : 'Salvar'}
+            onSubmit={handleCreate}
+            onCancel={() => setOpenCreate(false)}
+            disabled={saving}
+          />
+        </Modal>
+      )}
 
-              <div className="md:col-span-2">
-                <label className="text-xs opacity-70">Descrição</label>
-                <textarea
-                  rows={3}
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={draft.description || ''}
-                  onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs opacity-70">Owner</label>
-                <input
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={draft.owner || ''}
-                  onChange={(e) => setDraft({ ...draft, owner: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs opacity-70">Solicitante</label>
-                <input
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={draft.requester || ''}
-                  onChange={(e) => setDraft({ ...draft, requester: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs opacity-70">Área</label>
-                <input
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={draft.area || ''}
-                  onChange={(e) => setDraft({ ...draft, area: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs opacity-70">Empresa</label>
-                <input
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={draft.company || ''}
-                  onChange={(e) => setDraft({ ...draft, company: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs opacity-70">Urgência</label>
-                <select
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={draft.priority || 'P2'}
-                  onChange={(e) => setDraft({ ...draft, priority: e.target.value as Priority })}
-                >
-                  {PRIORITIES.map((p) => (
-                    <option key={p} value={p}>
-                      {priorityText(p)} ({p})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs opacity-70">Status</label>
-                <select
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={draft.status || 'Backlog'}
-                  onChange={(e) => setDraft({ ...draft, status: e.target.value as StatusGC })}
-                >
-                  {STATUS_COLUMNS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs opacity-70">Prazo</label>
-                <input
-                  type="date"
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={isoToInputDate(draft.due_date)}
-                  onChange={(e) =>
-                    setDraft({ ...draft, due_date: inputDateToISO(e.target.value), ...(draft as any), _due_input: e.target.value })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs opacity-70">Labels (vírgula)</label>
-                <input
-                  className="w-full mt-1 rounded-xl px-3 py-2 bg-white/10 border border-white/20 outline-none"
-                  value={draft.labels || ''}
-                  onChange={(e) => setDraft({ ...draft, labels: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex gap-2">
-                {isEditing && (
-                  <button
-                    onClick={handleDelete}
-                    className="px-4 py-2 rounded-xl bg-rose-500/80 hover:bg-rose-600"
-                  >
-                    Excluir
-                  </button>
-                )}
-                <button
-                  onClick={() => setOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15"
-                >
-                  Cancelar
-                </button>
-              </div>
+      {/* Modal Editar */}
+      {openEdit && editTask && (
+        <Modal onClose={() => setOpenEdit(false)}>
+          <div className="text-lg font-semibold mb-3">Editar tarefa</div>
+          <TaskForm
+            task={editTask}
+            onChange={setEditTask as any}
+            submitLabel={updating ? 'Atualizando…' : 'Salvar alterações'}
+            onSubmit={handleUpdate}
+            onCancel={() => setOpenEdit(false)}
+            extraRight={
               <button
-                disabled={saving || !draft.title?.trim()}
-                onClick={handleSave}
-                className="px-4 py-2 rounded-xl bg-emerald-500/80 hover:bg-emerald-600 disabled:opacity-60"
+                onClick={handleDelete}
+                className="px-3 py-2 rounded-xl bg-rose-500 hover:bg-rose-600"
+                type="button"
               >
-                {saving ? 'Salvando…' : 'Salvar'}
+                Excluir
               </button>
-            </div>
-          </div>
+            }
+            disabled={updating}
+            allowStatus
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/** Dashboard simples */
+function Dashboard({ tasks, loading }: { tasks: Task[]; loading: boolean }) {
+  const totals = useMemo(() => {
+    const byStatus: Record<string, number> = {};
+    const byPriority: Record<string, number> = {};
+    for (const t of tasks) {
+      byStatus[t.status || 'Aguardando'] = (byStatus[t.status || 'Aguardando'] || 0) + 1;
+      byPriority[t.priority || 'P2'] = (byPriority[t.priority || 'P2'] || 0) + 1;
+    }
+    return { byStatus, byPriority, total: tasks.length };
+  }, [tasks]);
+
+  return (
+    <div className="grid gap-4 md:grid-cols-3">
+      <GlassCard title="Total de tarefas">
+        <div className="text-4xl font-semibold">{loading ? '…' : totals.total}</div>
+      </GlassCard>
+      <GlassCard title="Por status">
+        <ul className="space-y-1">
+          {Object.entries(totals.byStatus).map(([k, v]) => (
+            <li key={k} className="flex justify-between">
+              <span>{k}</span><span className="font-semibold">{v}</span>
+            </li>
+          ))}
+        </ul>
+      </GlassCard>
+      <GlassCard title="Por prioridade">
+        <ul className="space-y-1">
+          {Object.entries(totals.byPriority).map(([k, v]) => (
+            <li key={k} className="flex justify-between">
+              <span>{PRIORITY_UI.find(p => p.value === k)?.label ?? k}</span>
+              <span className="font-semibold">{v}</span>
+            </li>
+          ))}
+        </ul>
+      </GlassCard>
+    </div>
+  );
+}
+
+/** Form reutilizável */
+function TaskForm({
+  task,
+  onChange,
+  submitLabel,
+  onSubmit,
+  onCancel,
+  extraRight,
+  disabled,
+  allowStatus = false,
+}: {
+  task: Task;
+  onChange: (updater: any) => void;
+  submitLabel: string;
+  onSubmit: () => void;
+  onCancel: () => void;
+  extraRight?: React.ReactNode;
+  disabled?: boolean;
+  allowStatus?: boolean;
+}) {
+  return (
+    <div className="grid md:grid-cols-2 gap-3">
+      <div className="md:col-span-2">
+        <label className="text-sm text-white/80">Título</label>
+        <input
+          className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none focus:bg-white/15"
+          value={task.title || ''}
+          onChange={(e) => onChange((s: Task) => ({ ...s, title: e.target.value }))}
+          placeholder="Ex.: Convocar entrevistas finalistas"
+        />
+      </div>
+
+      <div className="md:col-span-2">
+        <label className="text-sm text-white/80">Descrição</label>
+        <textarea
+          className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none focus:bg-white/15 min-h-[100px]"
+          value={task.description || ''}
+          onChange={(e) => onChange((s: Task) => ({ ...s, description: e.target.value }))}
+          placeholder="Contexto, links e critérios de pronto."
+        />
+      </div>
+
+      <div>
+        <label className="text-sm text-white/80">Área</label>
+        <select
+          className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+          value={task.area}
+          onChange={(e) => onChange((s: Task) => ({ ...s, area: e.target.value }))}
+        >
+          {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
+
+      <div>
+        <label className="text-sm text-white/80">Empresa</label>
+        <select
+          className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+          value={task.company}
+          onChange={(e) => onChange((s: Task) => ({ ...s, company: e.target.value }))}
+        >
+          {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      <div>
+        <label className="text-sm text-white/80">Prioridade</label>
+        <select
+          className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+          value={task.priority}
+          onChange={(e) => onChange((s: Task) => ({ ...s, priority: e.target.value as any }))}
+        >
+          {PRIORITY_UI.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+        </select>
+      </div>
+
+      {allowStatus ? (
+        <div>
+          <label className="text-sm text-white/80">Status</label>
+          <select
+            className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+            value={task.status}
+            onChange={(e) => onChange((s: Task) => ({ ...s, status: e.target.value }))}
+          >
+            {COLUMNS.map(c => <option key={c.key} value={c.key}>{c.title}</option>)}
+          </select>
+        </div>
+      ) : (
+        <div>
+          <label className="text-sm text-white/80">Prazo</label>
+          <input
+            type="date"
+            className="w-full mt-1 rounded-xl bg-white/10 border border-white/15 px-3 py-2 outline-none"
+            value={task.due_date || ''}
+            onChange={(e) => onChange((s: Task) => ({ ...s, due_date: e.target.value }))}
+          />
         </div>
       )}
 
-      {/* Liquid Glass keyframes */}
-      <style jsx global>{`
-        /* base */
-        html, body { height: 100%; background: #0b1320; }
+      <div className="md:col-span-2 flex items-center justify-end gap-3 pt-2">
+        {extraRight}
+        <button onClick={onCancel} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20" type="button">
+          Cancelar
+        </button>
+        <button
+          onClick={onSubmit}
+          disabled={disabled}
+          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60"
+          type="button"
+        >
+          {submitLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
 
-        /* camada aurora intensa */
-        #lg-layer {
-          background:
-            radial-gradient(60rem 30rem at 10% 20%, rgba(120, 70, 255, .55), transparent 60%),
-            radial-gradient(50rem 32rem at 85% 15%, rgba(0, 180, 255, .55), transparent 60%),
-            radial-gradient(55rem 30rem at 80% 90%, rgba(0, 180, 255, .35), transparent 60%),
-            radial-gradient(50rem 25rem at 20% 85%, rgba(120, 70, 255, .35), transparent 60%),
-            linear-gradient(180deg, #0b1320 0%, #06101e 100%);
-          filter: saturate(120%) blur(0.5px);
-          animation:
-            lg-move 26s ease-in-out infinite alternate,
-            lg-hue 32s ease-in-out infinite alternate;
-        }
-
-        @keyframes lg-move {
-          0%   { background-position: 0% 0%; transform: translate3d(0,0,0); }
-          50%  { background-position: 5% 2%; transform: translate3d(0,-0.4%,0) scale(1.01); }
-          100% { background-position: 8% 6%; transform: translate3d(0,0,0); }
-        }
-        @keyframes lg-hue {
-          0%   { filter: saturate(120%) blur(0.5px) hue-rotate(0deg); }
-          100% { filter: saturate(125%) blur(0.5px) hue-rotate(18deg); }
-        }
-      `}</style>
+/** Molduras */
+function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 grid place-items-center p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-3xl rounded-2xl border border-white/10 bg-white/10 backdrop-blur-2xl p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+function GlassCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/10 backdrop-blur-xl p-4">
+      <div className="text-white/80 text-sm mb-2">{title}</div>
+      {children}
     </div>
   );
 }
