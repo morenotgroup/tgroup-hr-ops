@@ -2,117 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Tokens (mais claros p/ melhor contraste) */
-:root{
-  --bg-1: #0a1731;   /* azul noite */
-  --bg-2: #10366d;   /* azul royal */
-  --bg-3: #125a9a;   /* azul piscina escuro */
-  --tile-bg: rgba(255,255,255,0.14);
-  --tile-inner: rgba(255,255,255,0.08);
-  --tile-stroke: rgba(255,255,255,0.30);
+/* ===== Base ===== */
+html, body, #__next { height: 100%; }
+
+/* Mantém textos legíveis no tema escuro + vidro */
+:root {
+  --glass-border: rgba(255,255,255,0.12);
+  --glass-bg: rgba(255,255,255,0.10);
+  --glass-bg-soft: rgba(255,255,255,0.06);
 }
 
-html, body { height: 100%; }
-body{
-  @apply text-slate-50 overflow-hidden antialiased;
-  background:
-    radial-gradient(1200px 700px at 50% 120%, #071124 0%, #081528 55%, #051223 100%),
-    linear-gradient(120deg, var(--bg-1), var(--bg-2), var(--bg-3));
-  background-size: 120% 120%, 220% 220%;
-  animation: bg-pan 28s ease-in-out infinite alternate;
-  position: relative;
-}
-/* camada líquida com brilho suave */
-body::before{
-  content:"";
-  position: fixed; inset:-20% -12% -25% -12%; z-index:-1;
-  background:
-    radial-gradient(38% 56% at 0% 0%,    rgba(109,40,217,.36), transparent 60%),
-    radial-gradient(42% 62% at 100% 10%, rgba(59,130,246,.34), transparent 60%),
-    radial-gradient(60% 80% at 50% 110%, rgba(6,182,212,.28), transparent 65%);
-  filter: blur(34px) saturate(115%);
-  animation: aurora 32s ease-in-out infinite alternate;
-  mix-blend-mode: screen;
-}
-body::after{
-  content:"";
-  position: fixed; inset:0; z-index:-1;
-  background: radial-gradient(900px 420px at 50% 0%, rgba(255,255,255,.22), transparent 70%);
-  mix-blend-mode: screen;
-}
-@keyframes bg-pan { 0%{background-position:50% 30%,0% 50%} 100%{background-position:50% 30%,100% 50%} }
-@keyframes aurora { 0%{transform:translateY(0) scale(1)} 100%{transform:translateY(-1%) scale(1.02)} }
-
-/* Cartão vítreo */
-.glass{
-  position: relative; border-radius: 22px;
-  background: linear-gradient(180deg, var(--tile-bg), var(--tile-inner));
-  border: 1px solid var(--tile-stroke);
-  backdrop-filter: blur(18px) saturate(120%);
-  -webkit-backdrop-filter: blur(18px) saturate(120%);
-  box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.25);
-}
-.glass::before{
-  content:""; position:absolute; inset:-1px; border-radius:22px;
-  background: linear-gradient(135deg, rgba(255,255,255,.28), rgba(255,255,255,.05) 45%, rgba(255,255,255,0) 65%);
-  -webkit-mask: linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
-  -webkit-mask-composite: xor; mask-composite: exclude; padding:1px; pointer-events:none;
-}
-.glass-pressable{ transition: transform .18s ease, box-shadow .18s ease; }
-.glass-pressable:hover{ transform: translateY(-2px); box-shadow: 0 16px 38px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.25); }
-.glass-soft{ background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.10)); }
-
-/* Inputs legíveis em cima do vidro */
-.input-ios{
-  @apply w-full rounded-xl px-3 py-2 text-slate-900 placeholder-slate-500;
-  background: rgba(255,255,255,.92);
-  border: 1px solid rgba(0,0,0,.10);
-}
-.select-ios{ @apply input-ios; }
-.textarea-ios{ @apply input-ios; }
-
-/* Botões */
-.btn{
-  @apply rounded-xl px-4 py-2 text-sm;
-  background: rgba(255,255,255,.85); color:#0f172a;
-  border: 1px solid rgba(0,0,0,.18);
-}
-.btn:disabled{ @apply opacity-50 cursor-not-allowed; }
-.btn-ghost{
-  @apply rounded-xl px-4 py-2 text-sm border;
-  background: transparent; border-color: rgba(255,255,255,.35); color: #e2e8f0;
-}
-
-/* Modal */
-.modal-backdrop{ position: fixed; inset:0; z-index:50; background: rgba(0,0,0,.45); }
-.modal-card{ max-width: 760px; width: 100%; }
-
-/* Acessibilidade */
-@media (prefers-reduced-motion: reduce){ body, body::before { animation: none; } }
-
-/* === Liquid Glass (aurora roxo/azul) === */
+/* ===== Fundo “Liquid Glass” com animação intensa (roxo → azul/rosa) =====
+   Use na raiz do app: <div className="min-h-screen text-white liquid-bg"> */
 .liquid-bg {
-  position: relative;
-  background: radial-gradient(1200px 800px at 10% 10%, rgba(120, 82, 199, 0.25), transparent 60%),
-              radial-gradient(1200px 800px at 90% 20%, rgba(22, 163, 255, 0.22), transparent 60%),
-              radial-gradient(900px 600px at 50% 90%, rgba(0, 225, 255, 0.14), transparent 60%),
-              linear-gradient(180deg, #1b1450 0%, #0b1230 100%);
-  overflow: hidden;
+  @apply text-white relative overflow-hidden;
+  /* base escura por baixo pra garantir contraste */
+  background:
+    radial-gradient(1200px 1200px at 10% -10%, rgba(147, 51, 234, 0.25), transparent 60%),
+    radial-gradient(1200px 1200px at 110% 20%, rgba(59, 130, 246, 0.25), transparent 60%),
+    radial-gradient(900px 900px at 50% 120%, rgba(236, 72, 153, 0.22), transparent 55%),
+    linear-gradient(180deg, #0b0620 0%, #0a0720 40%, #07051a 100%);
 }
 
-/* src/app/globals.css (apêndice/override) */
-.liquid-bg {
-  background: radial-gradient(1200px 600px at 10% 20%, rgba(88,101,242,.25), transparent 60%),
-              radial-gradient(900px 500px at 90% 10%, rgba(244,63,94,.22), transparent 60%),
-              radial-gradient(1000px 700px at 50% 100%, rgba(34,197,94,.20), transparent 60%),
-              #0b1320;
-  background-attachment: fixed;
-  animation: liquidShift 16s ease-in-out infinite;
+.liquid-bg::before,
+.liquid-bg::after {
+  content: "";
+  position: fixed;
+  inset: -30%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 60% at 22% 28%, rgba(168, 85, 247, 0.65), transparent 60%),
+    radial-gradient(50% 50% at 82% 22%, rgba(56, 189, 248, 0.55), transparent 60%),
+    radial-gradient(60% 60% at 70% 82%, rgba(244, 63, 94, 0.40), transparent 60%);
+  filter: blur(48px) saturate(140%);
+  animation:
+    blobMoveA 20s ease-in-out infinite alternate,
+    hueShift 24s ease-in-out infinite alternate;
+  will-change: transform, filter;
 }
-@keyframes liquidShift { 0%{filter:saturate(1)} 50%{filter:saturate(1.25)} 100%{filter:saturate(1)} }
 
+.liquid-bg::after {
+  mix-blend-mode: screen;
+  opacity: 0.75;
+  animation:
+    blobMoveB 24s ease-in-out infinite alternate-reverse,
+    hueShift 30s ease-in-out infinite alternate-reverse;
+}
+
+/* Movimento dos blobs (mais “vivo” pro modo TV) */
+@keyframes blobMoveA {
+  0%   { transform: translate3d(-4%, -6%, 0) scale(1.00); }
+  50%  { transform: translate3d(6%,   3%, 0) scale(1.06); }
+  100% { transform: translate3d(-2%,  7%, 0) scale(1.02); }
+}
+@keyframes blobMoveB {
+  0%   { transform: translate3d(7%,  9%, 0)  scale(1.05); }
+  50%  { transform: translate3d(-6%, -4%, 0) scale(1.02); }
+  100% { transform: translate3d(3%, -9%, 0)  scale(1.08); }
+}
+
+/* Variação de matiz pra dar sensação de “líquido” */
+@keyframes hueShift {
+  0%   { filter: hue-rotate(0deg)   blur(48px) saturate(140%); }
+  100% { filter: hue-rotate(28deg)  blur(48px) saturate(155%); }
+}
+
+/* Acessibilidade: respeita quem prefere menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  .liquid-bg::before,
+  .liquid-bg::after { animation: none; }
+}
+
+/* ===== Superfícies de vidro (helpers opcionais) ===== */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid var(--glass-border);
+}
+.glass-soft {
+  background: var(--glass-bg-soft);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid var(--glass-border);
+}
+
+/* ===== Scrollbar discreta ===== */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ===== Pulse sutil (destaque suave) ===== */
 .animate-pulse-slow { animation: pulse 3.5s ease-in-out infinite; }
-@keyframes pulse { 0%,100%{opacity:.8} 50%{opacity:1} }
-*/
-
-
+@keyframes pulse { 0%, 100% { opacity: .82; } 50% { opacity: 1; } }
