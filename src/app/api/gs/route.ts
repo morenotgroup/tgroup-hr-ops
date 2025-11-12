@@ -1,44 +1,54 @@
-import { NextResponse } from 'next/server';
+// src/app/api/gs/route.ts
+import { NextRequest, NextResponse } from 'next/server';
 
-const BASE = process.env.GS_WEBAPP_URL!;
-const KEY  = process.env.GS_WEBAPP_KEY!;
+const GS_URL = process.env.GS_WEBAPP_URL!;
+const GS_KEY = process.env.GS_WEBAPP_KEY!;
 
-function url(route: string, id?: string) {
-  const u = new URL(BASE);
-  u.searchParams.set('route', route);
-  u.searchParams.set('key', KEY);
-  if (id) u.searchParams.set('id', id);
-  return u.toString();
+function jsonError(message: string, extra: any = {}, status = 200) {
+  return NextResponse.json({ ok: false, error: message, ...extra }, { status });
 }
 
-export async function GET(req: Request) {
+async function fetchJson(url: string, init?: RequestInit) {
   try {
-    const u = new URL(req.url);
-    const route = u.searchParams.get('route') || 'list';
-    const target = url(route);
-    const r = await fetch(target, { cache: 'no-store' });
-    const data = await r.json();
-    return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    const res = await fetch(url, init);
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      const text = await res.text();
+      return { ok: false, error: 'non_json_from_gs', status: res.status, body: text };
+    }
+    return await res.json();
+  } catch (err: any) {
+    return { ok: false, error: String(err) };
   }
 }
 
-export async function POST(req: Request) {
+export async function GET(req: NextRequest) {
   try {
-    const u = new URL(req.url);
-    const route = u.searchParams.get('route') || '';
-    const id = u.searchParams.get('id') || undefined;
-    const body = await req.json().catch(() => ({}));
-    const target = url(route, id);
-    const r = await fetch(target, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, key: KEY }),
-    });
-    const data = await r.json();
+    const route = req.nextUrl.searchParams.get('route') || 'list';
+    const url = `${GS_URL}?route=${encodeURIComponent(route)}&key=${encodeURIComponent(GS_KEY)}`;
+    const data = await fetchJson(url, { cache: 'no-store' });
     return NextResponse.json(data);
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    return jsonError(String(e));
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const route = req.nextUrl.searchParams.get('route') || '';
+    const id = req.nextUrl.searchParams.get('id') || '';
+    const body = await req.json().catch(() => ({}));
+    const payload = JSON.stringify({ ...body, key: GS_KEY });
+
+    const url = `${GS_URL}?route=${encodeURIComponent(route)}${id ? `&id=${encodeURIComponent(id)}` : ''}`;
+    const data = await fetchJson(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      cache: 'no-store',
+    });
+    return NextResponse.json(data);
+  } catch (e: any) {
+    return jsonError(String(e));
   }
 }
