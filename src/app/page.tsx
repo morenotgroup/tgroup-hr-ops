@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -259,12 +261,26 @@ export default function Page() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button onClick={() => setView('dashboard')} className={`px-4 py-2 rounded-xl ${view==='dashboard'?'bg-white/30':'bg-white/15 hover:bg-white/25'} transition`}>Dashboard</button>
-            <button onClick={() => setView('calendar')}  className={`px-4 py-2 rounded-xl ${view==='calendar' ?'bg-white/30':'bg-white/15 hover:bg-white/25'} transition`}>Calendário</button>
-            <button onClick={() => setView('kanban')}    className={`px-4 py-2 rounded-xl ${view==='kanban'   ?'bg-white/30':'bg-white/15 hover:bg-white/25'} transition`}>Kanban</button>
-            {view==='kanban' && (
-              <button onClick={() => setOpenCreate(true)} className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 transition">+ Criar tarefa</button>
-            )}
+  <Link
+    href="/calendar"
+    className="px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 transition"
+  >
+    Calendário
+  </Link>
+
+  <button
+    onClick={() => setView(v => (v === 'kanban' ? 'dashboard' : 'kanban'))}
+    className="px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 transition"
+  >
+    {view === 'kanban' ? 'Dashboard' : 'Voltar ao Kanban'}
+  </button>
+
+  <button
+    onClick={() => setOpenCreate(true)}
+    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 transition"
+  >
+    + Criar tarefa
+            </button>
           </div>
         </div>
       </header>
