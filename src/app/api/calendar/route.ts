@@ -1,35 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const GS_URL = process.env.GS_WEBAPP_URL!;    // mesmo Apps Script
-const GS_KEY = process.env.GS_WEBAPP_KEY!;    // mesma chave
-const CAL_PIN = process.env.CAL_ADMIN_PIN!;   // PIN secreto no servidor
+const GS_URL = process.env.GS_WEBAPP_URL!;
+const GS_KEY = process.env.GS_WEBAPP_KEY!;
 
-function jerr(msg:string, status=200){ return NextResponse.json({ok:false, error:msg},{status}); }
-
-async function fetchJson(url:string, init?:RequestInit){
-  try{
-    const res = await fetch(url, init);
-    const ct = res.headers.get('content-type')||'';
-    if(!ct.includes('application/json')){ const t = await res.text(); return { ok:false, error:'non_json_from_gs', status:res.status, body:t }; }
-    return await res.json();
-  }catch(e:any){ return { ok:false, error:String(e) }; }
+async function fetchJson(url: string, init?: RequestInit) {
+  const r = await fetch(url, init);
+  const text = await r.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { ok: false, status: r.status, error: 'non_json_from_gs', body: text.slice(0, 200) };
+  }
 }
 
-export async function GET(req: NextRequest){
-  const route = req.nextUrl.searchParams.get('route') || 'calendar_list';
-  const url = `${GS_URL}?route=${encodeURIComponent(route)}&key=${encodeURIComponent(GS_KEY)}`;
+/** GET -> lista todos os eventos do Calendar */
+export async function GET(req: NextRequest) {
+  const url = `${GS_URL}?route=calendar_list&key=${encodeURIComponent(GS_KEY)}`;
   const data = await fetchJson(url, { cache: 'no-store' });
   return NextResponse.json(data);
 }
 
-export async function POST(req: NextRequest){
-  const route = req.nextUrl.searchParams.get('route') || '';
-  const id    = req.nextUrl.searchParams.get('id') || '';
-  const pin   = req.headers.get('x-admin-pin') || '';
-  if(!pin || pin !== CAL_PIN) return jerr('forbidden');
+/** POST -> create/update/delete do Calendar */
+export async function POST(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const route = (searchParams.get('route') || '').toLowerCase();
+  const id    = searchParams.get('id') || '';
 
-  const body = await req.json().catch(()=>({}));
+  const allowed = new Set(['calendar_create','calendar_update','calendar_delete']);
+  if (!allowed.has(route)) {
+    return NextResponse.json({ ok:false, error:'invalid_route' }, { status: 400 });
+  }
+
+  const body    = await req.json().catch(() => ({}));
   const payload = JSON.stringify({ ...body, key: GS_KEY });
-  const url = `${GS_URL}?route=${encodeURIComponent(route)}${id?`&id=${encodeURIComponent(id)}`:''}`;
-  const data = await fetchJson(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: payload, cache:'no-store' });
+  const url = `${GS_URL}?route=${encodeURIComponent(route)}${id ? `&id=${encodeURIComponent(id)}` : ''}`;
+
+  const data = await fetchJson(url, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: payload,
+    cache: 'no-store',
+  });
+
   return NextResponse.json(data);
+}
