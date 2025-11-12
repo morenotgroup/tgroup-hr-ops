@@ -102,18 +102,17 @@ body::after{
 
 /* src/app/globals.css (apêndice/override) */
 .liquid-bg {
-  background: radial-gradient(1200px 600px at 10% 20%, rgba(88, 101, 242, 0.25), transparent 60%),
-              radial-gradient(900px 500px at 90% 10%, rgba(244, 63, 94, 0.22), transparent 60%),
-              radial-gradient(1000px 700px at 50% 100%, rgba(34, 197, 94, 0.20), transparent 60%),
+  background: radial-gradient(1200px 600px at 10% 20%, rgba(88,101,242,.25), transparent 60%),
+              radial-gradient(900px 500px at 90% 10%, rgba(244,63,94,.22), transparent 60%),
+              radial-gradient(1000px 700px at 50% 100%, rgba(34,197,94,.20), transparent 60%),
               #0b1320;
   background-attachment: fixed;
   animation: liquidShift 16s ease-in-out infinite;
 }
+@keyframes liquidShift { 0%{filter:saturate(1)} 50%{filter:saturate(1.25)} 100%{filter:saturate(1)} }
 
-@keyframes liquidShift {
-  0%   { background-position: 0% 0%, 100% 0%, 50% 100%; filter: saturate(1); }
-  50%  { background-position: 15% 5%, 85% 8%, 55% 95%; filter: saturate(1.25); }
-  100% { background-position: 0% 0%, 100% 0%, 50% 100%; filter: saturate(1); }
-}
+.animate-pulse-slow { animation: pulse 3.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:.8} 50%{opacity:1} }
+*/
 
 
