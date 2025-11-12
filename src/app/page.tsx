@@ -1,7 +1,6 @@
-import Link from 'next/link';
-
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/gs';
