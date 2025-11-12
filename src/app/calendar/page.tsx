@@ -18,9 +18,11 @@ type CalEvent = {
 };
 
 async function apiList() {
+  // chama nosso proxy que já força calendar_list
   const r = await fetch('/api/calendar', { cache: 'no-store' });
   return r.json();
 }
+
 async function apiPost(route: 'calendar_create'|'calendar_update'|'calendar_delete', body: any, id?: string) {
   const url = `/api/calendar?route=${route}${id ? `&id=${encodeURIComponent(id)}` : ''}`;
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body) });
