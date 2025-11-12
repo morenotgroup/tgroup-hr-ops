@@ -1,46 +1,41 @@
+// src/app/api/calendar/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-const GS_URL = process.env.GS_WEBAPP_URL!;
-const GS_KEY = process.env.GS_WEBAPP_KEY!;
+const GS_URL = process.env.GS_WEBAPP_URL!;      // https://script.google.com/.../exec
+const GS_KEY = process.env.GS_WEBAPP_KEY!;      // tgroup_hrops_...
 
 async function fetchJson(url: string, init?: RequestInit) {
-  const r = await fetch(url, init);
-  const text = await r.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { ok: false, status: r.status, error: 'non_json_from_gs', body: text.slice(0, 200) };
+  const r = await fetch(url, { ...init, cache: 'no-store' });
+  const txt = await r.text();
+  try { return JSON.parse(txt); } catch {
+    return { ok: false, status: r.status, error: 'non_json_from_gs', body: txt };
   }
 }
 
-/** GET -> lista todos os eventos do Calendar */
 export async function GET(req: NextRequest) {
-  const url = `${GS_URL}?route=calendar_list&key=${encodeURIComponent(GS_KEY)}`;
-  const data = await fetchJson(url, { cache: 'no-store' });
+  const sp = req.nextUrl.searchParams;
+  // se vier `list`, trocamos para `calendar_list`
+  const route = (sp.get('route') || 'calendar_list')
+    .replace(/^list$/, 'calendar_list');
+
+  const url = `${GS_URL}?route=${encodeURIComponent(route)}&key=${encodeURIComponent(GS_KEY)}`;
+  const data = await fetchJson(url);
   return NextResponse.json(data);
 }
 
-/** POST -> create/update/delete do Calendar */
 export async function POST(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const route = (searchParams.get('route') || '').toLowerCase();
-  const id    = searchParams.get('id') || '';
+  const sp = req.nextUrl.searchParams;
+  const id = sp.get('id') || '';
+  // aceitamos: calendar_create | calendar_update | calendar_delete
+  const route = (sp.get('route') || '').toLowerCase();
+  const body = await req.json().catch(() => ({}));
 
-  const allowed = new Set(['calendar_create','calendar_update','calendar_delete']);
-  if (!allowed.has(route)) {
-    return NextResponse.json({ ok:false, error:'invalid_route' }, { status: 400 });
-  }
-
-  const body    = await req.json().catch(() => ({}));
   const payload = JSON.stringify({ ...body, key: GS_KEY });
   const url = `${GS_URL}?route=${encodeURIComponent(route)}${id ? `&id=${encodeURIComponent(id)}` : ''}`;
-
   const data = await fetchJson(url, {
     method: 'POST',
-    headers: { 'Content-Type':'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: payload,
-    cache: 'no-store',
   });
-
   return NextResponse.json(data);
 }
