@@ -16,8 +16,6 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-br">
-      <body className="font-sans antialiased text-white">{children}</body>
     <html lang="pt-br" className={spaceGrotesk.variable}>
       <body className="font-sans antialiased text-white">
         <RouteTransition>{children}</RouteTransition>
