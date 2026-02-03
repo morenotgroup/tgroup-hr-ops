@@ -1,8 +1,3 @@
-export const metadata = {
-  title: "T Group • HR Ops",
-  description: "Kanban + Dashboard de Gente & Cultura",
-};
-
 import "./globals.css";
 import type { ReactNode } from "react";
 import { Space_Grotesk } from "next/font/google";
@@ -13,6 +8,11 @@ const spaceGrotesk = Space_Grotesk({
   variable: "--font-sans",
   display: "swap",
 });
+
+export const metadata = {
+  title: "T Group • HR Ops",
+  description: "Kanban + Dashboard de Gente & Cultura",
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
