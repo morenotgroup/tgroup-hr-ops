@@ -9,6 +9,7 @@ import {
   KpiPill,
 } from "@/components/ui/liquid-system";
 import {
+  type MotionValue,
   motion,
   useMotionValue,
   useReducedMotion,
@@ -54,8 +55,8 @@ export default function StyleguidePage() {
   const { scrollYProgress } = useScroll();
   const scrollShift = useTransform(scrollYProgress, [0, 1], [0, 48]);
   const parallaxY = useTransform(
-    [smoothY, scrollShift] as const,
-    ([y, scroll]: [number, number]) => y + scroll
+    [smoothY, scrollShift] as MotionValue<number>[],
+    (values: number[]) => values[0] + values[1]
   );
 
   useEffect(() => {
