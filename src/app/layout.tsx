@@ -5,6 +5,17 @@ export const metadata = {
 
 import "./globals.css";
 import type { ReactNode } from "react";
+import { Space_Grotesk } from "next/font/google";
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="pt-br" className={spaceGrotesk.variable}>
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
