@@ -53,7 +53,10 @@ export default function StyleguidePage() {
   const smoothY = useSpring(mouseY, { stiffness: 70, damping: 18 });
   const { scrollYProgress } = useScroll();
   const scrollShift = useTransform(scrollYProgress, [0, 1], [0, 48]);
-  const parallaxY = useTransform([smoothY, scrollShift], ([y, scroll]) => y + scroll);
+  const parallaxY = useTransform(
+    [smoothY, scrollShift] as const,
+    ([y, scroll]: [number, number]) => y + scroll
+  );
 
   useEffect(() => {
     if (reduceMotion) return;
