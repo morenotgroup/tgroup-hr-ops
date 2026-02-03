@@ -25,15 +25,14 @@ const cards = [
   {
     title: "NF",
     description: "Notas fiscais, lançamentos e controles fiscais.",
-    href: "https://gc-os.tgroup.com/nf-temporario",
-    external: true,
+    href: "/nf",
     icon: FileText,
     tone: "from-emerald-400/70 to-cyan-400/70",
   },
   {
     title: "Facilities",
     description: "Infra, serviços, espaços e bem-estar do escritório.",
-    href: "https://gc-os.tgroup.com/facilities",
+    href: "https://t-facilities-rotas-phffrj8wt-morenos-projects-17a30e7f.vercel.app/",
     external: true,
     icon: Building2,
     tone: "from-amber-400/70 to-rose-400/70",
@@ -41,7 +40,7 @@ const cards = [
   {
     title: "Onboarding",
     description: "Rituais de chegada, acessos e documentação inicial.",
-    href: "https://gc-os.tgroup.com/onboarding",
+    href: "https://onboarding-tgroup-74uwd6aj9-morenos-projects-17a30e7f.vercel.app/#/1",
     external: true,
     icon: UserPlus,
     tone: "from-violet-400/70 to-fuchsia-400/70",
@@ -49,8 +48,7 @@ const cards = [
   {
     title: "Analytics",
     description: "Indicadores, insights e acompanhamento estratégico.",
-    href: "https://gc-os.tgroup.com/analytics-looker",
-    external: true,
+    href: "/analytics",
     icon: BarChart3,
     tone: "from-teal-400/70 to-sky-400/70",
   },
