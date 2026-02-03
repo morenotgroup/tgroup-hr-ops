@@ -25,28 +25,32 @@ const cards = [
   {
     title: "NF",
     description: "Notas fiscais, lançamentos e controles fiscais.",
-    href: "/nf",
+    href: "https://gc-os.tgroup.com/nf-temporario",
+    external: true,
     icon: FileText,
     tone: "from-emerald-400/70 to-cyan-400/70",
   },
   {
     title: "Facilities",
     description: "Infra, serviços, espaços e bem-estar do escritório.",
-    href: "/facilities",
+    href: "https://gc-os.tgroup.com/facilities",
+    external: true,
     icon: Building2,
     tone: "from-amber-400/70 to-rose-400/70",
   },
   {
     title: "Onboarding",
     description: "Rituais de chegada, acessos e documentação inicial.",
-    href: "/onboarding",
+    href: "https://gc-os.tgroup.com/onboarding",
+    external: true,
     icon: UserPlus,
     tone: "from-violet-400/70 to-fuchsia-400/70",
   },
   {
     title: "Analytics",
     description: "Indicadores, insights e acompanhamento estratégico.",
-    href: "/analytics",
+    href: "https://gc-os.tgroup.com/analytics-looker",
+    external: true,
     icon: BarChart3,
     tone: "from-teal-400/70 to-sky-400/70",
   },
@@ -144,17 +148,15 @@ export default function Home() {
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {cards.map((card) => {
                 const Icon = card.icon;
-                return (
-                  <Link
-                    key={card.title}
-                    href={card.href}
-                    className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 transition hover:-translate-y-1 hover:border-white/30 hover:bg-white/10 hover:shadow-2xl active:scale-[0.98]"
-                  >
+                const cardClasses =
+                  "group relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 transition hover:-translate-y-1 hover:border-white/30 hover:bg-white/10 hover:shadow-2xl active:scale-[0.98] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950";
+                const cardContent = (
+                  <>
                     <div
-                      className={`absolute right-6 top-6 h-16 w-16 rounded-2xl bg-gradient-to-br ${card.tone} opacity-70 blur-xl transition group-hover:opacity-100`}
+                      className={`pointer-events-none absolute right-6 top-6 z-0 h-16 w-16 rounded-2xl bg-gradient-to-br ${card.tone} opacity-70 blur-xl transition group-hover:opacity-100`}
                       aria-hidden
                     />
-                    <div className="relative flex flex-col gap-5">
+                    <div className="relative z-10 flex flex-col gap-5">
                       <div className="flex items-center justify-between">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-white">
                           <Icon className="h-6 w-6" />
@@ -174,6 +176,30 @@ export default function Home() {
                         Pronto para iniciar
                       </div>
                     </div>
+                  </>
+                );
+
+                if (card.external) {
+                  return (
+                    <a
+                      key={card.title}
+                      href={card.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cardClasses}
+                    >
+                      {cardContent}
+                    </a>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={card.title}
+                    href={card.href}
+                    className={cardClasses}
+                  >
+                    {cardContent}
                   </Link>
                 );
               })}
