@@ -10,7 +10,7 @@ const GRAFITE_DATA =
 export default function GCShell({ children }: { children: ReactNode }) {
   return (
     <div className="relative min-h-screen overflow-hidden text-white">
-      <div className="absolute inset-0 -z-10">
+      <div className="pointer-events-none absolute inset-0 -z-10">
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${PHOTO_URL})` }}
