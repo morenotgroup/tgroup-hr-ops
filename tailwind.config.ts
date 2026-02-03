@@ -5,8 +5,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // 👇 conecta a var(--font-sans) do next/font
-        sans: ["var(--font-sans)", "system-ui", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+        sans: ["\"Space Grotesk\"", "system-ui", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
       },
     },
   },
