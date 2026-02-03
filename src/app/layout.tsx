@@ -20,11 +20,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="font-sans antialiased text-white">
         <RouteTransition>{children}</RouteTransition>
       </body>
-
-export default function RootLayout({ children }: { children: ReactNode }) {
-  return (
-    <html lang="pt-br">
-      <body className="font-sans antialiased text-white">{children}</body>
     </html>
   );
 }
